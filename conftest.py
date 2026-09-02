@@ -1,5 +1,4 @@
 from pathlib import Path
-
 import pytest
 import logging
 import random
@@ -8,11 +7,8 @@ import time
 
 from src.command_runner import CommandRunner
 from src.yaml_parser import ConfigLoader
-logs = logging.getLogger()
 
-@pytest.fixture
-def data_dir() -> Path:
-    return Path(__file__).parent / "test" / "data"
+logs = logging.getLogger()
 
 @pytest.fixture(scope="function")
 def vm_create(request):
