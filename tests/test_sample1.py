@@ -3,7 +3,7 @@ import logging
 import traceback
 import os
 
-from src.vm import VirtctlSSH
+from libs.vm import VirtctlSSH
 
 logs = logging.getLogger()
 
@@ -11,12 +11,12 @@ class TestExample():
      """Test class for BSOD tests"""
 
      @pytest.mark.bsod
-     #@pytest.mark.parametrize("vm_create", [2], indirect=True)
+     @pytest.mark.parametrize("vm_create", [2], indirect=True)
      def test_vm_create(self, vm_create):
          logs.info("This is first test")
-         #results =  vm_create
-         #for k,v in results.items():
-         #   logs.info(f"vm name: {k}, status: {v.stdout}") 
+         results =  vm_create
+         for k,v in results.items():
+            logs.info(f"vm name: {k}, status: {v.stdout}")
          win_ssh = VirtctlSSH(
                     vm_name="win2022-vm-vvijay11",
                     namespace="windows-bsod",

@@ -5,8 +5,8 @@ import random
 import os
 import time
 
-from src.command_runner import CommandRunner
-from src.yaml_parser import ConfigLoader
+from libs.command_runner import CommandRunner
+from libs.yaml_parser import ConfigLoader
 
 logs = logging.getLogger()
 
