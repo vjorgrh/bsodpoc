@@ -41,10 +41,19 @@ def vm_create(request):
         runner.run(f"oc delete vm {vm_name} -n windows-bsod", shell=True)
 
 
+# Repo-wide defaults for krkn chaos scenarios. A test's @pytest.mark.krkn(...)
+# only needs to declare what differs; anything omitted falls back to these.
+KRKN_DEFAULTS: Dict[str, Any] = {
+    "namespace": "windows-bsod",
+    "vmName": "hjoshi-win2022",
+    "recoverTimeout": 300,
+}
+
+
 class KrknContext(NamedTuple):
     """Bundle handed to a test: the krkn-lib client plus the marker's parameters."""
     client: Any                 # krkn_lib.k8s.KrknKubernetes instance
-    params: Dict[str, Any]      # kwargs declared on @pytest.mark.krkn(...)
+    params: Dict[str, Any]      # KRKN_DEFAULTS merged with @pytest.mark.krkn(...) kwargs
 
 
 @pytest.fixture(scope="function")
@@ -69,7 +78,8 @@ def krknChaos(request):
     from krkn_lib.k8s import KrknKubernetes
 
     marker = request.node.get_closest_marker("krkn")
-    params = dict(marker.kwargs) if marker else {}
+    # Marker kwargs override the repo-wide defaults; a test declares only the diff.
+    params = {**KRKN_DEFAULTS, **(marker.kwargs if marker else {})}
 
     kubeconfigPath = os.environ.get("KUBECONFIG") or os.path.expanduser("~/.kube/config")
     logs.info(f"Initialising krkn-lib client with kubeconfig: {kubeconfigPath}")
