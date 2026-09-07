@@ -1,5 +1,5 @@
 import logging
-import os 
+import os
 from typing import List, Optional
 
 from .command_runner import CommandRunner, CommandResult
