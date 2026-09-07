@@ -1,7 +1,6 @@
 import subprocess
 import time
 import logging
-from pathlib import Path
 from typing import List, Union, NamedTuple, Optional
 
 logs = logging.getLogger(__name__)
@@ -10,14 +9,14 @@ class CommandResult(NamedTuple):
      """Structured immutable output for executed commands."""
      stdout: str
      stderr: str
-     exit_code: int
+     exitCode: int
      success: bool
 
 
 class CommandRunner:
     """Runs shell commands locally"""
-    def __init__(self,  default_retries: int = 3, wait: int = 3):
-        self.default_retries = default_retries
+    def __init__(self, defaultRetries: int = 3, wait: int = 3):
+        self.defaultRetries = defaultRetries
         self.wait = wait
 
 
@@ -26,23 +25,23 @@ class CommandRunner:
        Executes a command locally
        :param command: String (if shell=True) or List of strings (if shell=False).
        :param retries: Overrides default retry count if provided
-       :param shell: True to run via shell wrapper (use with caution). 
+       :param shell: True to run via shell wrapper (use with caution).
        """
-       max_attempts = (retries if retries is not None else self.default_retries) + 1
-       for attempt in range(1, max_attempts + 1):
+       maxAttempts = (retries if retries is not None else self.defaultRetries) + 1
+       for attempt in range(1, maxAttempts + 1):
          try:
            result = subprocess.run(
                     command,
                     shell=shell,
                     capture_output=True,
-                    text=True, 
+                    text=True,
                     check=False
            )
 
            if result.returncode != 0:
-              logs.warning(f"Command failed with exit code {result.returncode} (Attempt {attempt}/{max_attempts})")
-          
-              if attempt < max_attempts:
+              logs.warning(f"Command failed with exit code {result.returncode}: {result.stderr.strip()} (Attempt {attempt}/{maxAttempts})")
+
+              if attempt < maxAttempts:
                  logs.info(f"Retrying execution in {self.wait} seconds ... ")
                  time.sleep(self.wait)
                  continue
@@ -50,17 +49,17 @@ class CommandRunner:
            return CommandResult(
                  stdout=result.stdout.strip(),
                  stderr=result.stderr.strip(),
-                 exit_code=result.returncode,
+                 exitCode=result.returncode,
                  success=(result.returncode == 0))
 
          except (FileNotFoundError, PermissionError) as ex:
              logs.error(f"Critical environment exception: {ex}")
-             return CommandResult(stdout="", stderr=str(ex), exit_code=-2, success=False)
+             return CommandResult(stdout="", stderr=str(ex), exitCode=-2, success=False)
          except subprocess.SubprocessError as ex:
-             logs.warning(f"Subprocess plumbing exception: {ex} (Attempt {attempt}/{max_attempts})")
-             if attempt < max_attempts:
+             logs.warning(f"Subprocess plumbing exception: {ex} (Attempt {attempt}/{maxAttempts})")
+             if attempt < maxAttempts:
                  logs.info(f"Retrying execution in {self.wait} seconds ... ")
                  time.sleep(self.wait)
              else:
-                 return CommandResult(stdout="", stderr=str(ex), exit_code=-2, success=False)
-       return CommandResult(stdout="", stderr="Max execution retries exceeded", exit_code=-3, success=False) 
+                 return CommandResult(stdout="", stderr=str(ex), exitCode=-2, success=False)
+       return CommandResult(stdout="", stderr="Max execution retries exceeded", exitCode=-3, success=False)

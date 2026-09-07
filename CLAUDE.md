@@ -1,7 +1,7 @@
 # Project Guidelines
 
 ## Code Style & Architecture
-- Use Python 3.14+ syntax and type hints for all function signatures
+- Target Python 3.11 (the `.venv` interpreter; krkn-lib 5.0.0 does not support newer versions). Use type hints for all function signatures.
 - Follow PEP 8 guidelines strictly
 - Prefer explicit imports over wildcard imports.
 

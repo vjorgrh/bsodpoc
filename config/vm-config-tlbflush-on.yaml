@@ -5,6 +5,20 @@ metadata:
   namespace: windows-bsod
 spec:
   runStrategy: Always
+  # Dynamically creates/clones a new PVC named after the generated VM
+  dataVolumeTemplates:
+    - metadata:
+        name: "${VM_NAME}"
+      spec:
+        storage:
+          resources:
+            requests:
+              storage: 80Gi
+          storageClassName: ocs-storagecluster-ceph-rbd-virtualization
+        source:
+          pvc:
+            namespace: windows-bsod
+            name: hjoshi-boot-disk  # Source golden image
   template:
     metadata:
       labels:
@@ -19,39 +33,6 @@ spec:
           sockets: 1
           threads: 1
           model: EPYC-Genoa
-          features:
-            - name: skip-l1dfl-vmentry
-              policy: require
-            - name: mds-no
-              policy: require
-            - name: gds-no
-              policy: require
-            - name: pschange-mc-no
-              policy: require
-            - name: rdctl-no
-              policy: require
-            - name: erms
-              policy: disable
-            - name: fsrm
-              policy: disable
-            - name: ssbd
-              policy: require
-            - name: avx-vnni
-              policy: require
-            - name: tsc-scale
-              policy: require
-            - name: vmcb-clean
-              policy: require
-            - name: flushbyasid
-              policy: require
-            - name: pause-filter
-              policy: require
-            - name: pfthreshold
-              policy: require
-            - name: v-vmsave-vmload
-              policy: require
-            - name: vgif
-              policy: require
         memory:
           guest: "16Gi"
         clock:
@@ -92,9 +73,6 @@ spec:
             - name: virtiocontainerdisk
               cdrom:
                 bus: sata
-            - name: cloudinitdisk
-              disk:
-                bus: virtio
           interfaces:
             - name: default
               masquerade: {}
@@ -116,12 +94,8 @@ spec:
           pod: {}
       volumes:
         - name: rootdisk
-          persistentVolumeClaim:
-            claimName: "${VM_NAME}"
+          dataVolume:
+            name: "${VM_NAME}"
         - name: virtiocontainerdisk
           containerDisk:
             image: container-native-virtualization/virtio-win:v4.12-1784795134
-        - name: cloudinitdisk
-          cloudInitNoCloud:
-            secretRef:
-              name: win-admin-secret
