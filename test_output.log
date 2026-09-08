@@ -1,0 +1,36 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-9.1.1, pluggy-1.6.0 -- /home/hijoshi/bsodpoc/.venv/bin/python3.11
+cachedir: .pytest_cache
+metadata: {'Python': '3.11.16', 'Platform': 'Linux-7.2.3-300.fc45.x86_64-x86_64-with-glibc2.44', 'Packages': {'pytest': '9.1.1', 'pluggy': '1.6.0'}, 'Plugins': {'metadata': '3.1.1', 'allure-pytest': '2.16.0', 'html': '4.2.0'}}
+rootdir: /home/hijoshi/bsodpoc
+configfile: pytest.ini
+plugins: metadata-3.1.1, allure-pytest-2.16.0, html-4.2.0
+collecting ... collected 2 items
+
+tests/test_chaos.py::TestChaos::test_vmSurvivesVirtLauncherKill 
+-------------------------------- live log setup --------------------------------
+2026-09-08 22:11:57 [INFO] Initialising krkn-lib client with kubeconfig: /home/hijoshi/.kube/config (krknlib_fixtures.py:53)
+-------------------------------- live log call ---------------------------------
+2026-09-08 22:11:58 [INFO] target virt-launcher pod: virt-launcher-win2022-vm-hjoshi1-brds8 (test_chaos.py:107)
+2026-09-08 22:11:59 [INFO] CHAOS: deleting virt-launcher pod virt-launcher-win2022-vm-hjoshi1-brds8 (test_chaos.py:116)
+2026-09-08 22:12:17 [INFO] waiting for recovery ... (VMI phase='Scheduling') (test_chaos.py:133)
+2026-09-08 22:12:31 [INFO] waiting for recovery ... (VMI phase='Scheduled') (test_chaos.py:133)
+2026-09-08 22:12:45 [INFO] recovered: new pod virt-launcher-win2022-vm-hjoshi1-rqx4d Running, VMI phase Running (test_chaos.py:130)
+PASSED                                                                   [ 50%]
+------------------------------ live log teardown -------------------------------
+2026-09-08 22:12:45 [INFO] krknChaos fixture teardown complete (krknlib_fixtures.py:60)
+
+tests/test_chaos.py::TestChaos::test_hostSideKernelScanOnVmNode 
+-------------------------------- live log setup --------------------------------
+2026-09-08 22:12:45 [INFO] Initialising krkn-lib client with kubeconfig: /home/hijoshi/.kube/config (krknlib_fixtures.py:53)
+-------------------------------- live log call ---------------------------------
+2026-09-08 22:12:46 [INFO] VM win2022-vm-hjoshi1 runs on node integrity-gs04.sys.eng.rdu2.dc.redhat.com (test_chaos.py:176)
+2026-09-08 22:13:30 [INFO] node integrity-gs04.sys.eng.rdu2.dc.redhat.com kernel release: '5.14.0-687.39.1.el9_8.x86_64\n' (test_chaos.py:187)
+2026-09-08 22:14:11 [INFO] host kernel-log scan on integrity-gs04.sys.eng.rdu2.dc.redhat.com:
+ (test_chaos.py:197)
+PASSED                                                                   [100%]
+------------------------------ live log teardown -------------------------------
+2026-09-08 22:14:11 [INFO] krknChaos fixture teardown complete (krknlib_fixtures.py:60)
+
+
+======================== 2 passed in 134.82s (0:02:14) =========================

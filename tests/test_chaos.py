@@ -78,9 +78,9 @@ class TestChaos():
     """krkn-lib chaos scenarios for BSOD/VM resiliency."""
 
     @pytest.mark.krkn(
-        vmName="hjoshi-win2022",
+        vmName="win2022-vm-hjoshi1",
         namespace="windows-bsod",
-        labelSelector="vm.kubevirt.io/name=hjoshi-win2022",
+        labelSelector="vm.kubevirt.io/name=win2022-vm-hjoshi1",
         recoverTimeout=300,
     )
     def test_vmSurvivesVirtLauncherKill(self, krknChaos):
@@ -137,7 +137,7 @@ class TestChaos():
             f"VM {vmName} did not recover within {recoverTimeout}s after virt-launcher kill")
 
     @pytest.mark.krkn(
-        vmName="hjoshi-win2022",
+        vmName="win2022-vm-hjoshi1",
         namespace="windows-bsod",
     )
     def test_hostSideKernelScanOnVmNode(self, krknChaos):
