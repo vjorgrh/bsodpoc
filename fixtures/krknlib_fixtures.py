@@ -13,7 +13,7 @@ logs = logging.getLogger()
 # only needs to declare what differs; anything omitted falls back to these.
 KRKN_DEFAULTS: Dict[str, Any] = {
     "namespace": DEFAULT_NAMESPACE,
-    "vmName": "hjoshi-win2022",
+    "vmName": "win2022-vm-hjoshi1",
     "recoverTimeout": 300,
 }
 
