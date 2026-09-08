@@ -20,9 +20,9 @@ class TestExample():
      """Test class for BSOD tests"""
 
      @pytest.mark.bsod
-     @pytest.mark.parametrize("vm_create", [(2, "windows-bsod")], indirect=True)
-     def test_vm_create(self, vm_create):
-         results = vm_create
+     @pytest.mark.parametrize("vmCreate", [(2, "windows-bsod")], indirect=True)
+     def test_vm_create(self, vmCreate):
+         results = vmCreate
          for vmName, status in results.items():
             logs.info(f"vm name: {vmName}, status: {status.stdout}")
 
@@ -42,10 +42,10 @@ class TestExample():
 
      @pytest.mark.check
      @pytest.mark.skip(reason=TUNNEL_SKIP_REASON)
-     def test_vm_create_tunnel(self, ssh_tunnel_connection):
+     def test_vm_create_tunnel(self, sshTunnelConnection):
          """Times repeated PowerShell calls over one reused ControlMaster tunnel."""
          logs.info("This is tunnel check test")
-         tunnel = ssh_tunnel_connection("win2022-vm-vvijay11", "windows-bsod")
+         tunnel = sshTunnelConnection("win2022-vm-vvijay11", "windows-bsod")
 
          start = time.perf_counter()
          result = tunnel.runPowershell("Get-ComputerInfo | Select-Object CsName")
@@ -75,14 +75,18 @@ class TestExample():
 
      @pytest.mark.tunnel
      @pytest.mark.skip(reason=TUNNEL_SKIP_REASON)
-     @pytest.mark.parametrize("vm_create", [(2, "windows-bsod")], indirect=True)
-     def test_vm_tunnel(self, vm_with_tunnel):
+     @pytest.mark.parametrize("vmCreate", [(2, "windows-bsod")], indirect=True)
+     def test_vm_tunnel(self, vmWithTunnel):
          """One tunnel per freshly created VM: exec + upload + download on each."""
          logs.info("This is tunnel test")
-         for vmName, tunnel in vm_with_tunnel.items():
+         for vmName, tunnel in vmWithTunnel.items():
             result = tunnel.runPowershell("Get-ComputerInfo | Select-Object CsName")
             assert result.success
             result = tunnel.send("/Users/vvijay/scripts/guest/churn.ps1", "C:/scripts/")
             assert result.success
             result = tunnel.receive("C:/scripts/churn.ps1", "/Users/vvijay/scripts/check")
             assert result.success
+
+     @pytest.mark.benchmark
+     def test_benchmark_runner(self, windowsVMScale):
+         assert windowsVMScale.run() is not False
