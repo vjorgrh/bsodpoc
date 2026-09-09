@@ -1,0 +1,9 @@
+# ============================================================================
+# requirements/krknlib.txt
+# krkn-lib for chaos injection scenarios (fixture: fixtures/krknlib_fixtures.py)
+# asyncssh for VM SSH tunnel access (fixture: fixtures/vut_fixtures.py)
+# Install with: pip install -r requirements/krknlib.txt
+# Optional: Can be uninstalled after tests with --cleanup-krknlib flag
+# ============================================================================
+krkn-lib==5.0.0
+asyncssh==2.14.0

@@ -1,0 +1,82 @@
+# Docker Compose configuration for Podman/Docker
+# Test chaos scenarios against multiple targets
+#
+# Usage:
+#   podman-compose up                           # Run all services
+#   podman-compose run chaos-vm bash            # Interactive shell
+#   podman-compose run chaos-vm pytest tests/ -v --cleanup-all
+
+version: '3.8'
+
+services:
+  # Base service with common configuration
+  chaos-base: &chaos-base
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: chaos-test:latest
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      # Mount kubeconfig for Kubernetes access
+      - ~/.kube/config:/root/.kube/config:ro
+      # Mount local code for development (optional)
+      # - .:/app
+    networks:
+      - chaos-testing
+    restart: "no"
+
+  # Service 1: Chaos test on VM
+  chaos-vm:
+    <<: *chaos-base
+    container_name: chaos-vm-test
+    environment:
+      <<: *base_env
+      NAMESPACE: windows-bsod
+      TARGET_NAME: win2022-vm-hjoshi1
+      TARGET_TYPE: vm
+    command: tests/test_chaos.py -v --cleanup-all
+    healthcheck:
+      test: ["CMD", "python", "-c", "import pytest; print('ready')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Service 2: Chaos test on different VM (optional)
+  chaos-vm-alt:
+    <<: *chaos-base
+    container_name: chaos-vm-alt-test
+    environment:
+      <<: *base_env
+      NAMESPACE: windows-bsod
+      TARGET_NAME: win2022-vm-alt
+      TARGET_TYPE: vm
+    command: tests/test_chaos.py -v --cleanup-all
+    depends_on:
+      - chaos-vm
+    healthcheck:
+      test: ["CMD", "python", "-c", "import pytest; print('ready')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Service 3: Benchmark test (uncomment if you have benchmark tests)
+  # benchmark-runner:
+  #   <<: *chaos-base
+  #   container_name: benchmark-test
+  #   environment:
+  #     <<: *base_env
+  #     NAMESPACE: benchmark-ns
+  #     TARGET_NAME: benchmark-runner-01
+  #     TARGET_TYPE: benchmark
+  #   command: tests/test_benchmark.py -v --cleanup-all
+
+networks:
+  chaos-testing:
+    driver: bridge
+
+# Common environment variables (shared across services)
+x-environment: &base_env
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
