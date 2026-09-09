@@ -1,0 +1,8 @@
+# ============================================================================
+# requirements/benchmark.txt
+# benchmark-runner for performance testing (fixture: fixtures/benchmark_runner_fixtures.py)
+# Install with: pip install -r requirements/benchmark.txt
+# Optional: NOT YET IN USE - for future performance test scenarios
+# Optional: Can be uninstalled after tests with --cleanup-benchmark flag
+# ============================================================================
+# benchmark-runner>=2.0.0

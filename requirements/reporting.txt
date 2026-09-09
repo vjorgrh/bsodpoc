@@ -1,0 +1,11 @@
+# ============================================================================
+# requirements/reporting.txt
+# Reporting and HTML output (optional, used in CI/reports)
+# Install with: pip install -r requirements/reporting.txt
+# Optional: Can be uninstalled after tests with --cleanup-reporting flag
+# ============================================================================
+pytest-html==4.2.0
+allure-pytest==2.16.0
+allure-python-commons==2.16.0
+Jinja2==3.1.6
+MarkupSafe==3.0.3

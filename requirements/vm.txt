@@ -1,0 +1,7 @@
+# ============================================================================
+# requirements/vm.txt
+# VM setup and configuration (fixture: fixtures/vm_fixtures.py)
+# Install with: pip install -r requirements/vm.txt
+# ALWAYS KEEP: Required for vm_create fixture to work
+# ============================================================================
+PyYAML==6.0.1
