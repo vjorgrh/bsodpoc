@@ -88,5 +88,6 @@ class TestExample():
             assert result.success
 
      @pytest.mark.benchmark
-     def test_benchmark_runner(self, windowsVMScale):
+     @pytest.mark.parametrize("windowsVMScale", [2], indirect=True)
+     def test_create_multiple_vms(self, windowsVMScale):
          assert windowsVMScale.run() is not False
