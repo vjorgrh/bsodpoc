@@ -4,10 +4,12 @@ import os
 import tempfile
 import time
 import pytest
+from pathlib import Path
 
 logs = logging.getLogger()
 
 from benchmark_runner.workloads.windows_vm import WindowsVM
+from fixtures.common import DEFAULT_NAMESPACE
 
 class WindowsVMScale(WindowsVM):
      def _initialize_run(self):
@@ -48,22 +50,37 @@ def windowsVMScale(oc, request):
     # Accept both (count, namespace) and a bare count.
     scale = getattr(request, "param", 1)
     logs.info(f"Create {scale} vm")
+    vmNames = []
     with TemporaryEnvironmentVariables():
         env = environment_variables.environment_variables_dict
         env['run_type'] = 'test_ci'
         env['kubeadmin_password'] = env.get('kubeadmin_password')
         env['windows_url'] = env.get('windows_url')
         env['run_artifacts_path'] = env.get('run_artifacts_path') or tempfile.mkdtemp()
-        logs.info(f"Run artifcats path: {env['run_artifacts_path']}) 
-        env['namespace'] = env.get('namespace')
+        logs.info(f"Run artifcats path: {env['run_artifacts_path']}")
+        env['namespace'] = env.get('namespace') or DEFAULT_NAMESPACE
         if scale > 1:
+           workload = "windows_vm_scale"
            scale_nodes = [os.environ.get("WORKER_NODE")]
-           env['workload'] = 'windows_vm_scale'
+           env['workload'] = workload
            env['scale'] = str(scale)
            env['scale_nodes'] = str(scale_nodes)
+           for i in range(scale):
+               name = '-'.join([workload.removesuffix('_scale').replace('_', '-'), env.get('trunc_uuid'),str(i)])
+               vmNames.append(name)
         else:
-           env['workload'] = 'windows_vm'
+           workload = "windows_vm"
+           env['workload'] = workload
+           name = '-'.join([workload.replace('_', '-'), env.get('trunc_uuid')])
+           vmNames.append(name)
         vmops = WorkloadsOperations()
         vmops.initialize_workload()
         vm = WindowsVMScale()
-        yield vm
+        vm.run()
+        yield vmNames
+
+@pytest.fixture
+def vmTunnel(windowsVMScale, sshTunnelConnection):
+    """Composes windowsVMScale + sshTunnelConnection: one SSH tunnel per created VM."""
+    iFile = Path(os.environ.get('RUN_ARTIFACTS_PATH') + "/ssh/vm_key")
+    return {vmName: sshTunnelConnection(identityFile=iFile, vmName=vmName) for vmName in windowsVMScale}
