@@ -6,7 +6,6 @@ pytest_plugins = [
     "fixtures.krknlib_fixtures",
     "fixtures.tunnel_fixtures",
     "fixtures.vut_fixtures",
-    "fixtures.benchmark_runner_fixtures",
 ]
 
 # Register pytest automation hooks (dependency management)
