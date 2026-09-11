@@ -4,7 +4,7 @@ import logging  # Provides standard logging capabilities to output test progress
 import pytest  # The main Pytest testing framework used for writing and running test cases
 
 from libs.command_runner import CommandRunner  # Custom helper class to run local shell/CLI commands (like oc)
-from fixtures.common import get_namespace, get_target_name, execOnNode  # Helper functions for environment-based config
+from libs.common import get_namespace, get_target_name, execOnNode  # Helper functions for environment-based config
 
 # Retrieves the root logger instance so we can record logs (e.g., logs.info, logs.warning)
 logs = logging.getLogger()

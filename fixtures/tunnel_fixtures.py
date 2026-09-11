@@ -8,7 +8,7 @@ import pytest
 
 from libs.command_runner import CommandRunner
 from libs.ssh_tunnel import VirtctlSshTunnel
-from fixtures.common import DEFAULT_NAMESPACE
+from libs.common import DEFAULT_NAMESPACE
 
 logs = logging.getLogger()
 

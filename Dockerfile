@@ -70,7 +70,14 @@ ENV NAMESPACE=windows-bsod \
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import pytest; print('pytest ready')" || exit 1
 
-# Default command: run pytest with modular installation and cleanup
-# Can be overridden: podman run chaos-test pytest tests/test_chaos.py -v --cleanup-all
-ENTRYPOINT ["pytest"]
-CMD ["tests/", "-v"]
+# Run tests with optional marker filtering
+# If PYTEST_MARKER is set, run only tests matching that marker
+# If PYTEST_MARKER is empty, run all tests
+# Examples:
+#   podman run -e PYTEST_MARKER=krkn chaos-test:latest        # Run only @pytest.mark.krkn tests
+#   podman run -e PYTEST_MARKER="not benchmark" chaos-test    # Run all except benchmark
+#   podman run chaos-test:latest                               # Run all tests (default)
+ENV PYTEST_MARKER=""
+
+ENTRYPOINT ["/bin/bash", "-c"]
+CMD ["pytest tests/ -v $([ -n \"$PYTEST_MARKER\" ] && echo \"-m '$PYTEST_MARKER'\" || echo '')"]
