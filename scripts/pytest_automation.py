@@ -14,6 +14,7 @@ import sys
 import os
 import json
 from pathlib import Path
+import logging
 
 # Colors for terminal output
 RED = '\033[0;31m'
@@ -47,6 +48,100 @@ def log_error(msg: str) -> None:
 
 def log_success(msg: str) -> None:
     print(f"{GREEN}✅ {msg}{NC}")
+
+
+def cleanup_kubernetes_resources(namespace: str = "windows-bsod") -> bool:
+    """
+    Clean up only test-created Kubernetes resources (VMs and DVs).
+    Preserves user VMs like 'win2022-vm-hjoshi1' and 'win2022-vm-vvijay1'.
+
+    Returns True if cleanup succeeded, False otherwise.
+    """
+    # List of test-created resource prefixes to delete
+    test_resource_patterns = [
+        "win2022-vm-clone",
+        "win2022-vm-scale",
+        "win2022-vm-multi",
+        "win2022-vm-delete",
+        "win2022-vm-lifecycle",
+        "win2022-dv-clone",
+        "win2022-dv-scale",
+        "win2022-dv-multi",
+        "win2022-dv-delete",
+        "win2022-dv-lifecycle",
+    ]
+
+    try:
+        log_info(f"Cleaning up test-created Kubernetes resources in namespace '{namespace}'...")
+
+        # Get all VMs and DVs in the namespace
+        result = subprocess.run(
+            ["oc", "get", "vm,dv", "-n", namespace, "-o", "jsonpath={range .items[*]}{.metadata.name}{\"\\n\"}{end}"],
+            capture_output=True,
+            timeout=30,
+            text=True
+        )
+
+        if result.returncode != 0:
+            log_warn(f"Could not list resources in namespace '{namespace}' (kubeconfig may not be set)")
+            return False
+
+        resources = result.stdout.strip().split('\n') if result.stdout.strip() else []
+
+        if not resources:
+            log_info("No resources found in namespace")
+            return True
+
+        # Filter resources that match test patterns
+        resources_to_delete = [
+            res for res in resources
+            if any(pattern in res for pattern in test_resource_patterns) and res
+        ]
+
+        if not resources_to_delete:
+            log_info("No test-created resources found (nothing to cleanup)")
+            return True
+
+        # Delete filtered resources
+        log_info(f"Found {len(resources_to_delete)} test-created resource(s) to delete: {', '.join(resources_to_delete)}")
+
+        for resource in resources_to_delete:
+            try:
+                # Determine resource type (vm or dv)
+                check_vm = subprocess.run(
+                    ["oc", "get", "vm", resource, "-n", namespace],
+                    capture_output=True,
+                    timeout=10
+                )
+
+                if check_vm.returncode == 0:
+                    resource_type = "vm"
+                else:
+                    resource_type = "dv"
+
+                log_info(f"Deleting {resource_type} '{resource}'...")
+
+                delete_result = subprocess.run(
+                    ["oc", "delete", resource_type, resource, "-n", namespace, "--ignore-not-found=true"],
+                    capture_output=True,
+                    timeout=30
+                )
+
+                if delete_result.returncode == 0:
+                    log_success(f"Deleted {resource_type} '{resource}'")
+                else:
+                    log_warn(f"Could not delete {resource_type} '{resource}'")
+
+            except Exception as e:
+                log_warn(f"Error deleting resource '{resource}': {e}")
+                continue
+
+        log_success(f"Kubernetes resource cleanup completed for namespace '{namespace}'")
+        return True
+
+    except Exception as e:
+        log_error(f"Error during Kubernetes cleanup: {e}")
+        return False
 
 
 def safe_pip_uninstall(package: str) -> bool:
@@ -340,14 +435,18 @@ def pytest_collection_finish(session) -> None:
 
 def pytest_sessionfinish(session, exitstatus: int) -> None:
     """
-    PHASE 4: Auto-cleanup on success
-    If tests passed (exitstatus == 0), cleanup optional libs based on flags.
-    If tests failed, keep deps for debugging.
+    PHASE 4: Auto-cleanup
+    Always cleanup Kubernetes test resources (VMs/DVs) regardless of test pass/fail.
+    Only cleanup optional libs if tests passed (exitstatus == 0).
     """
-    log_section("PHASE 4: POST-CLEANUP (Optional Dependency Cleanup)")
+    log_section("PHASE 4: POST-CLEANUP (Kubernetes & Dependency Cleanup)")
+
+    # ALWAYS cleanup Kubernetes test resources (regardless of pass/fail)
+    namespace = os.environ.get("NAMESPACE", "windows-bsod")
+    cleanup_kubernetes_resources(namespace)
 
     if exitstatus == 0:
-        log_success("Tests PASSED (exit code 0) - Running post-cleanup")
+        log_success("Tests PASSED (exit code 0) - Running dependency cleanup")
 
         # Get cleanup flags from pytest config
         cleanup_all = session.config.getoption("--cleanup-all")

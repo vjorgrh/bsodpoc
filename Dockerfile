@@ -27,9 +27,12 @@ RUN ln -sf /usr/local/bin/kubectl /usr/local/bin/oc && \
     echo "✓ oc symlink created (kubectl → oc)"
 
 # Download and install virtctl binary (KubeVirt CLI)
-RUN curl -L https://github.com/kubevirt/kubevirt/releases/download/v1.1.1/virtctl-v1.1.1-linux-x86_64 -o /usr/local/bin/virtctl && \
+# Using v1.8.4 to match CNV 4.22.9 cluster version
+RUN curl -sL https://github.com/kubevirt/kubevirt/releases/download/v1.8.4/virtctl-v1.8.4-linux-amd64 \
+    --output /usr/local/bin/virtctl --show-error --fail && \
     chmod +x /usr/local/bin/virtctl && \
-    virtctl version --client 2>/dev/null || echo "virtctl installed"
+    /usr/local/bin/virtctl version --client && \
+    echo "✓ virtctl v1.8.4 installed"
 
 # Copy project files
 COPY . .
@@ -52,11 +55,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy kubectl from base stage to runtime (needed for K8s operations)
+# Install SSH client (required for virtctl ssh operations)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy kubectl and virtctl from base stage to runtime (needed for K8s operations)
 COPY --from=base /usr/local/bin/kubectl /usr/local/bin/kubectl
+COPY --from=base /usr/local/bin/virtctl /usr/local/bin/virtctl
 
 # Create symlink for oc compatibility
-RUN ln -sf /usr/local/bin/kubectl /usr/local/bin/oc
+RUN ln -sf /usr/local/bin/kubectl /usr/local/bin/oc && \
+    chmod +x /usr/local/bin/virtctl
 
 # Copy only necessary files from base stage
 COPY --from=base /app .
@@ -65,11 +75,6 @@ COPY --from=base /app .
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
-
-# Default configuration (can be overridden at runtime)
-ENV NAMESPACE=windows-bsod \
-    TARGET_NAME=win2022-vm-hjoshi1 \
-    TARGET_TYPE=vm
 
 # Health check: verify pytest can be imported
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

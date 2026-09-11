@@ -7,7 +7,8 @@ import time
 logs = logging.getLogger()
 
 # Default namespace constant (used as fallback throughout fixtures)
-DEFAULT_NAMESPACE = "test123"
+# Must be set via NAMESPACE environment variable
+DEFAULT_NAMESPACE = os.environ.get("NAMESPACE")
 
 # Import production-grade configuration system
 # Generic names: NAMESPACE, TARGET_NAME, TARGET_TYPE
