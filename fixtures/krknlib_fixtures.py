@@ -6,7 +6,7 @@ from typing import Any, Dict, NamedTuple  # Type hinting utilities for clearer c
 
 import pytest  # Pytest testing framework for defining fixtures and hooks
 
-from fixtures.common import DEFAULT_NAMESPACE  # Import global default namespace string from common fixtures
+from libs.common import DEFAULT_NAMESPACE  # Import global default namespace string from common
 
 # Retrieve root logger instance to record fixture log messages
 logs = logging.getLogger()

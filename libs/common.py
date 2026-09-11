@@ -11,7 +11,7 @@ DEFAULT_NAMESPACE = "test123"
 
 # Import production-grade configuration system
 # Generic names: NAMESPACE, TARGET_NAME, TARGET_TYPE
-from fixtures.config import (
+from libs.config import (
 	get_namespace,
 	get_target_name,
 	get_target_type,
