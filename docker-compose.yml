@@ -2,16 +2,12 @@
 # Test chaos scenarios against multiple targets
 #
 # Usage:
-#   podman-compose up                           # Run all services
-#   podman-compose run vut-test bash            # Interactive shell
-#   podman-compose run chaos-test pytest tests/test_chaos.py -v
+#   podman-compose run all-tests                # Run all tests (VUT + CRUD + Chaos, excluding benchmark)
+#   podman-compose run vut-test                 # Run VUT tests only
+#   podman-compose run crud-test                # Run CRUD tests only
+#   podman-compose run chaos-test               # Run Chaos tests only
 
 version: '3.8'
-
-# Common environment variables (shared across services) - must be defined BEFORE services
-x-environment: &base_env
-  PYTHONUNBUFFERED: "1"
-  PYTHONDONTWRITEBYTECODE: "1"
 
 services:
   # Base service with common configuration
@@ -23,64 +19,66 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
+      KUBECONFIG: /root/.kube/config
     volumes:
       # Mount kubeconfig for Kubernetes access
       - ~/.kube/config:/root/.kube/config:ro
-      # Mount local code for development (optional)
-      # - .:/app
     networks:
       - chaos-testing
     restart: "no"
+    entrypoint: []
 
-  # Service 1: VUT tests (krkn-lib VM management)
+  # Primary service: Run all tests (VUT + CRUD + Chaos) except benchmark
+  all-tests:
+    <<: *chaos-base
+    container_name: all-tests
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      KUBECONFIG: /root/.kube/config
+      NAMESPACE: ${NAMESPACE:-windows-bsod}
+      TARGET_NAME: ${TARGET_NAME:-win2022-vm-hjoshi1}
+      TARGET_TYPE: vm
+    command: ["pytest", "tests/", "-v", "-m", "not benchmark"]
+
+  # Service: VUT tests only (krkn-lib VM management)
   vut-test:
     <<: *chaos-base
     container_name: vut-test
     environment:
-      <<: *base_env
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      KUBECONFIG: /root/.kube/config
       NAMESPACE: ${NAMESPACE:-windows-bsod}
       TARGET_NAME: ${TARGET_NAME:-win2022-vm-hjoshi1}
       TARGET_TYPE: vm
-      PYTEST_MARKER: krkn
-    command: pytest tests/test_vut.py -v -m krkn
+    command: ["pytest", "tests/test_vut.py", "-v", "-m", "krkn"]
 
-  # Service 2: VM CRUD tests
+  # Service: VM CRUD tests only
   crud-test:
     <<: *chaos-base
     container_name: crud-test
     environment:
-      <<: *base_env
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      KUBECONFIG: /root/.kube/config
       NAMESPACE: ${NAMESPACE:-windows-bsod}
       TARGET_NAME: ${TARGET_NAME:-win2022-vm-hjoshi1}
       TARGET_TYPE: vm
-    command: pytest tests/test_vm_crud.py -v
-    depends_on:
-      - vut-test
+    command: ["pytest", "tests/test_vm_crud.py", "-v"]
 
-  # Service 3: Chaos test
+  # Service: Chaos tests only
   chaos-test:
     <<: *chaos-base
     container_name: chaos-test
     environment:
-      <<: *base_env
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      KUBECONFIG: /root/.kube/config
       NAMESPACE: ${NAMESPACE:-windows-bsod}
       TARGET_NAME: ${TARGET_NAME:-win2022-vm-hjoshi1}
       TARGET_TYPE: vm
-      PYTEST_MARKER: "not benchmark"
-    command: pytest tests/test_chaos.py -v -m "not benchmark"
-    depends_on:
-      - crud-test
-
-  # Service 3: Benchmark test (uncomment if you have benchmark tests)
-  # benchmark-runner:
-  #   <<: *chaos-base
-  #   container_name: benchmark-test
-  #   environment:
-  #     <<: *base_env
-  #     NAMESPACE: benchmark-ns
-  #     TARGET_NAME: benchmark-runner-01
-  #     TARGET_TYPE: benchmark
-  #   command: tests/test_benchmark.py -v --cleanup-all
+    command: ["pytest", "tests/test_chaos.py", "-v", "-m", "not benchmark"]
 
 networks:
   chaos-testing:

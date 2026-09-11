@@ -26,6 +26,11 @@ RUN curl -L https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl -o /usr/lo
 RUN ln -sf /usr/local/bin/kubectl /usr/local/bin/oc && \
     echo "✓ oc symlink created (kubectl → oc)"
 
+# Download and install virtctl binary (KubeVirt CLI)
+RUN curl -L https://github.com/kubevirt/kubevirt/releases/download/v1.1.1/virtctl-v1.1.1-linux-x86_64 -o /usr/local/bin/virtctl && \
+    chmod +x /usr/local/bin/virtctl && \
+    virtctl version --client 2>/dev/null || echo "virtctl installed"
+
 # Copy project files
 COPY . .
 

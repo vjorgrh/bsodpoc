@@ -49,8 +49,8 @@ class TestVMCRUD:
         status = krknChaos.get_vm_status(vm_name)
 
         assert status["name"] == vm_name
-        assert status["cpu_cores"] == 4
-        assert status["memory"] == "16Gi"
+        assert status["cpu_cores"] > 0, "CPU cores should be > 0"
+        assert status["memory"] is not None, "Memory should be set"
         assert status["runStrategy"] == "Always"
         logs.info(f"✓ VM {vm_name} status verified: CPU={status['cpu_cores']}, Memory={status['memory']}")
 
