@@ -30,7 +30,7 @@ class TestExample():
 
          # Sanity-check guest reachability on the persistent VM via virtctl ssh.
          winSsh = VirtctlSSH(
-                    vmName="hjoshi-win2022",
+                    vmName="win2022-vm-hjoshi1",
                     namespace="windows-bsod",
                     username="Administrator",
                     identityFile="~/.ssh/id_ed25519",

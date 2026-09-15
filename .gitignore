@@ -20,3 +20,4 @@ replaced_config/
 output/
 allure-results/
 report.html
+test_output.log

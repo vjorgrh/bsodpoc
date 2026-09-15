@@ -1,197 +1,118 @@
-import time
-import logging
+import time  # Provides time-related functions like sleep() and time() for timestamps/deadlines
+import logging  # Provides standard logging capabilities to output test progress and messages
 
-import pytest
+import pytest  # The main Pytest testing framework used for writing and running test cases
 
-from libs.command_runner import CommandRunner
+from libs.command_runner import CommandRunner  # Custom helper class to run local shell/CLI commands (like oc)
+from libs.common import get_namespace, get_target_name, execOnNode  # Helper functions for environment-based config
 
+# Retrieves the root logger instance so we can record logs (e.g., logs.info, logs.warning)
 logs = logging.getLogger()
 
-# Default helper image for host-side exec. krkn-lib's own exec_command_on_node
-# hardcodes docker.io/fedora/tools, which Docker Hub no longer serves (pull =>
-# "access denied"). UBI9 is public and this Red Hat cluster already pulls it.
-NODE_EXEC_IMAGE = "registry.access.redhat.com/ubi9/ubi"
-
-
-def execOnNode(client, node, command, podName, namespace,
-               image=NODE_EXEC_IMAGE, timeout=120):
-    """Run a shell command on a node via a transient privileged pod, using
-    krkn-lib primitives directly.
-
-    This replaces krkn-lib's ``exec_command_on_node`` wrapper, which (a) hardcodes
-    a dead image, (b) waits 500s before failing, and (c) never deletes the pod.
-    Here we build the same privileged/hostNetwork/dbus pod but with a pullable
-    image, a short timeout, and guaranteed cleanup.
-
-    :param command: the command as a single shell string (e.g. "uname -r").
-        It is handed to krkn-lib as ``[command]`` so it runs under ``bash -c
-        "<command>"``; passing a token list instead (["uname", "-r"]) makes
-        krkn-lib build ``bash -c uname -r``, where ``-r`` becomes a positional
-        param and is silently dropped.
-    :return: the command's stdout as a string.
-    """
-    podBody = {
-        "apiVersion": "v1",
-        "kind": "Pod",
-        "metadata": {"name": podName},
-        "spec": {
-            "hostNetwork": True,
-            "nodeName": node,
-            "restartPolicy": "Never",
-            "containers": [{
-                "name": "hosttools",
-                "image": image,
-                "command": ["/bin/sh", "-c", "sleep infinity"],
-                "securityContext": {"privileged": True},
-                "volumeMounts": [{
-                    "mountPath": "/run/dbus/system_bus_socket",
-                    "name": "dbus",
-                    "readOnly": True,
-                }],
-            }],
-            "volumes": [{
-                "name": "dbus",
-                "hostPath": {"path": "/run/dbus/system_bus_socket"},
-            }],
-        },
-    }
-
-    # Best-effort pre-clean in case a previous run left the pod behind.
-    try:
-        client.delete_pod(podName, namespace)
-        time.sleep(3)
-    except Exception:
-        pass
-
-    try:
-        client.create_pod(podBody, namespace, timeout)
-        # Pass as a single-element list so krkn-lib runs `bash -c "<command>"`.
-        return client.exec_cmd_in_pod([command], podName, namespace)
-    finally:
-        try:
-            client.delete_pod(podName, namespace)
-        except Exception:
-            logs.warning(f"could not delete helper pod {podName} in {namespace}")
+# Get namespace and target name from environment or use defaults
+DEFAULT_NAMESPACE = get_namespace()
+DEFAULT_TARGET_NAME = get_target_name()
 
 
 class TestChaos():
-    """krkn-lib chaos scenarios for BSOD/VM resiliency."""
+	"""krkn-lib chaos scenarios for BSOD/VM resiliency."""
 
-    @pytest.mark.krkn(
-        vmName="hjoshi-win2022",
-        namespace="windows-bsod",
-        labelSelector="vm.kubevirt.io/name=hjoshi-win2022",
-        recoverTimeout=300,
-    )
-    def test_vmSurvivesVirtLauncherKill(self, krknChaos):
-        """Chaos: kill the VM's virt-launcher pod and assert KubeVirt recovers it.
+	# Custom Pytest marker defining scenario metadata passed directly to the `krknChaos` fixture
+	@pytest.mark.krkn(
+		vmName=DEFAULT_TARGET_NAME,  # Target resource name (VM, benchmark runner, etc - from env or default)
+		namespace=DEFAULT_NAMESPACE,  # Target Kubernetes namespace (from env or default)
+		labelSelector=f"vm.kubevirt.io/name={DEFAULT_TARGET_NAME}",  # KubeVirt label selector to locate backing pod
+		recoverTimeout=300,  # Maximum SLA time allowed for recovery (in seconds)
+	)
+	def test_vmSurvivesVirtLauncherKill(self, krknChaos):
+		"""Chaos: kill the VM's virt-launcher pod and assert KubeVirt recovers it."""
+		client = krknChaos.client  # Extract krkn-lib Kubernetes client instance from fixture
+		params = krknChaos.params  # Extract scenario parameters dictionary from fixture
+		ns = params["namespace"]  # Store namespace string ("windows-bsod")
+		vmName = params["vmName"]  # Store VM name string ("win2022-vm-hjoshi1")
+		selector = params["labelSelector"]  # Store label selector string
+		recoverTimeout = params.get("recoverTimeout", 300)  # Get recovery timeout SLA (default: 300s)
+		runner = CommandRunner()  # Instantiate helper to execute local shell commands
 
-        Deleting the virt-launcher pod of a running VMI simulates a node/pod
-        failure. With ``runStrategy: Always`` KubeVirt must reschedule a new
-        launcher pod and bring the VMI back to ``Running``. This test uses the
-        krkn-lib client (from the ``krknChaos`` fixture) to find and kill the
-        pod, and ``oc`` for the VMI-level recovery assertion.
-        """
-        client = krknChaos.client
-        params = krknChaos.params
-        ns = params["namespace"]
-        vmName = params["vmName"]
-        selector = params["labelSelector"]
-        recoverTimeout = params.get("recoverTimeout", 300)
-        runner = CommandRunner()
+		# 1. Find the live virt-launcher pod backing the VM via krkn-lib
+		pods = client.list_pods(namespace=ns, label_selector=selector)  # Search pods matching label
+		assert pods, f"no virt-launcher pod found for {vmName} — is the VM running?"  # Fail test if pod isn't found
+		originalPod = pods[0]  # Get the pod name of the active virt-launcher pod
+		logs.info(f"target virt-launcher pod: {originalPod}")  # Log target pod name
 
-        # 1. Find the live virt-launcher pod backing the VM.
-        pods = client.list_pods(namespace=ns, label_selector=selector)
-        assert pods, f"no virt-launcher pod found for {vmName} — is the VM running?"
-        originalPod = pods[0]
-        logs.info(f"target virt-launcher pod: {originalPod}")
+		# Sanity Check: Ensure the VirtualMachineInstance (VMI) is in "Running" state before injecting chaos
+		before = runner.run(
+			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'", shell=True)  # Query VMI status via oc
+		assert before.stdout == "Running", f"VM not Running before chaos: {before.stdout!r}"  # Assert VM is healthy
 
-        # Sanity: the VM must be Running before we break it, otherwise the
-        # recovery assertion below is meaningless.
-        before = runner.run(
-            f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'", shell=True)
-        assert before.stdout == "Running", f"VM not Running before chaos: {before.stdout!r}"
+		# 2. INJECT CHAOS: Delete the VM's backing virt-launcher pod to simulate a pod/node crash
+		logs.info(f"CHAOS: deleting virt-launcher pod {originalPod}")  # Log chaos action
+		client.delete_pod(originalPod, ns)  # Issue delete pod API request via krkn-lib
 
-        # 2. CHAOS: kill the virt-launcher pod (simulates node/pod failure).
-        logs.info(f"CHAOS: deleting virt-launcher pod {originalPod}")
-        client.delete_pod(originalPod, ns)
+		# 3. Assert recovery: Poll until a NEW launcher pod reaches Running AND the VMI phase returns to Running
+		deadline = time.time() + recoverTimeout  # Calculate deadline timestamp (current time + 300s)
+		recovered = False  # Initialize recovery status flag as False
 
-        # 3. Assert recovery: a NEW launcher pod reaches Running AND the VMI
-        #    returns to Running, within recoverTimeout.
-        deadline = time.time() + recoverTimeout
-        recovered = False
-        while time.time() < deadline:
-            current = client.list_pods(namespace=ns, label_selector=selector)
-            newPods = [p for p in current if p != originalPod]
-            vmiPhase = runner.run(
-                f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
-                shell=True).stdout
-            if newPods and client.is_pod_running(newPods[0], ns) and vmiPhase == "Running":
-                logs.info(f"recovered: new pod {newPods[0]} Running, VMI phase {vmiPhase}")
-                recovered = True
-                break
-            logs.info(f"waiting for recovery ... (VMI phase={vmiPhase!r})")
-            time.sleep(10)
+		while time.time() < deadline:  # Loop continuously until deadline is reached
+			current = client.list_pods(namespace=ns, label_selector=selector)  # Get current list of pods matching label
+			newPods = [p for p in current if p != originalPod]  # Filter out the killed pod to identify any new pod
+			vmiPhase = runner.run(  # Query OpenShift for current VMI phase
+				f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
+				shell=True).stdout  # Get stdout string from command result
 
-        assert recovered, (
-            f"VM {vmName} did not recover within {recoverTimeout}s after virt-launcher kill")
+			# Check if a new pod exists, is running according to krkn-lib, and the VMI phase is "Running"
+			if newPods and client.is_pod_running(newPods[0], ns) and vmiPhase == "Running":
+				logs.info(f"recovered: new pod {newPods[0]} Running, VMI phase {vmiPhase}")  # Log success
+				recovered = True  # Set recovery flag to True
+				break  # Exit polling loop early since VM recovered successfully
 
-    @pytest.mark.krkn(
-        vmName="hjoshi-win2022",
-        namespace="windows-bsod",
-    )
-    def test_hostSideKernelScanOnVmNode(self, krknChaos):
-        """Host-side reach: run a command on the worker node that runs the VM.
+			logs.info(f"waiting for recovery ... (VMI phase={vmiPhase!r})")  # Log waiting state
+			time.sleep(10)  # Wait 10 seconds before polling again
 
-        Spins up a transient privileged pod on the target node (via krkn-lib
-        primitives create_pod/exec_cmd_in_pod/delete_pod) and runs a shell
-        command with host visibility. That host level is exactly where the
-        TLB-flush / ``HYPERVISOR_ERROR`` split-lock (#AC) signatures appear in
-        the kernel log; those never reach the Windows guest dump. This test is
-        the foundation lever for host-side fault injection, but is written
-        non-destructively: it only reads.
+		# Final Assertion: Verify that the VM recovered before the deadline expired
+		assert recovered, (
+			f"VM {vmName} did not recover within {recoverTimeout}s after virt-launcher kill")
 
-        Steps:
-          1. Resolve which node the VMI runs on (KubeVirt-specific -> ``oc``).
-          2. Sanity-check that node is Ready via krkn-lib.
-          3. Run a host-side command (``uname -r``) on it via krkn-lib and
-             assert we get output back — proving host-side execution works.
-          4. As bonus evidence, scan ``dmesg`` for split-lock/#AC/hypervisor
-             lines and log them (not asserted: a clean host is the healthy case).
-        """
-        client = krknChaos.client
-        params = krknChaos.params
-        ns = params["namespace"]
-        vmName = params["vmName"]
-        runner = CommandRunner()
+	# Custom Pytest marker defining parameters for host kernel scan scenario
+	@pytest.mark.krkn(
+		vmName=DEFAULT_TARGET_NAME,  # Target resource name (from env or default)
+		namespace=DEFAULT_NAMESPACE,  # Target Kubernetes namespace (from env or default)
+	)
+	def test_hostSideKernelScanOnVmNode(self, krknChaos):
+		"""Host-side reach: run a command on the worker node that runs the VM."""
+		client = krknChaos.client  # Extract krkn-lib client from fixture
+		params = krknChaos.params  # Extract scenario parameters from fixture
+		ns = params["namespace"]  # Store namespace string
+		vmName = params["vmName"]  # Store VM name string
+		runner = CommandRunner()  # Instantiate shell command runner
 
-        # 1. Which node is the VM running on? (KubeVirt VMI status -> node name.)
-        nodeRes = runner.run(
-            f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.nodeName}}'",
-            shell=True,
-        )
-        assert nodeRes.success and nodeRes.stdout, (
-            f"could not resolve node for {vmName}: {nodeRes.stderr}")
-        node = nodeRes.stdout.strip()
-        logs.info(f"VM {vmName} runs on node {node}")
+		# 1. Resolve which worker node the target VMI is currently running on
+		nodeRes = runner.run(
+			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.nodeName}}'",  # Extract node name via oc
+			shell=True,
+		)
+		assert nodeRes.success and nodeRes.stdout, (  # Fail test if command failed or returned empty output
+			f"could not resolve node for {vmName}: {nodeRes.stderr}")
+		node = nodeRes.stdout.strip()  # Clean up whitespace/newlines from node name string
+		logs.info(f"VM {vmName} runs on node {node}")  # Log target worker node name
 
-        # 2. That node must be Ready (krkn-lib node inventory).
-        readyNodes = client.list_ready_nodes()
-        assert node in readyNodes, f"node {node} is not Ready (ready: {readyNodes})"
+		# 2. Sanity check: Ensure the target worker node is reported as Ready by krkn-lib
+		readyNodes = client.list_ready_nodes()  # Get list of all Ready nodes in cluster
+		assert node in readyNodes, f"node {node} is not Ready (ready: {readyNodes})"  # Assert node health
 
-        # 3. Host-side command: prove we can execute on the node.
-        kernel = execOnNode(
-            client, node, "uname -r",
-            podName="krkn-hostscan", namespace=ns,
-        )
-        logs.info(f"node {node} kernel release: {kernel!r}")
-        assert kernel and kernel.strip(), (
-            f"no output from host-side exec on {node} — helper pod failed")
+		# 3. Host-side command execution: Execute 'uname -r' on the host node to verify execution access
+		kernel = execOnNode(
+			client, node, "uname -r",  # Command to run on host
+			podName="krkn-hostscan", namespace=ns,  # Helper pod configuration
+		)
+		logs.info(f"node {node} kernel release: {kernel!r}")  # Log host kernel version
+		assert kernel and kernel.strip(), (  # Assert command returned valid stdout output
+			f"no output from host-side exec on {node} — helper pod failed")
 
-        # 4. Bonus evidence: scan the host kernel log for BSOD-relevant signatures.
-        scan = execOnNode(
-            client, node,
-            "dmesg 2>/dev/null | grep -iE 'split.?lock|#AC|hypervisor' || true",
-            podName="krkn-hostscan", namespace=ns,
-        )
-        logs.info(f"host kernel-log scan on {node}:\n{scan}")
+		# 4. Scan host kernel log (dmesg) for BSOD-relevant error signatures (split-lock, #AC, hypervisor errors)
+		scan = execOnNode(
+			client, node,
+			"dmesg 2>/dev/null | grep -iE 'split.?lock|#AC|hypervisor' || true",  # Search dmesg without failing shell
+			podName="krkn-hostscan", namespace=ns,  # Helper pod configuration
+		)
+		logs.info(f"host kernel-log scan on {node}:\n{scan}")  # Log captured dmesg entries for debugging

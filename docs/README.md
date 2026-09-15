@@ -58,11 +58,15 @@ python3.11 -m venv .venv
 
 ## Running tests
 
+### Option 1: Direct Pytest (Host Machine)
+
 Use the `.venv` interpreter so `krkn_lib` resolves:
 
 ```bash
-.venv/bin/pytest
-# or: source .venv/bin/activate && pytest
+NAMESPACE=windows-bsod \
+TARGET_NAME=win2022-vm-hjoshi1 \
+TARGET_TYPE=vm \
+pytest tests/ -v -m "not benchmark" --ignore=tests/test_sample1.py --cleanup-all
 ```
 
 Run only BSOD-marked tests:
@@ -81,6 +85,52 @@ Skip the disruptive virt-launcher pod-kill scenario:
 
 ```bash
 .venv/bin/pytest --deselect tests/test_chaos.py::TestChaos::test_vmSurvivesVirtLauncherKill
+```
+
+### Option 2: podman-compose (Recommended for Dockerized Execution)
+
+Run all 19 tests with environment variables via podman-compose:
+
+```bash
+podman-compose run --rm \
+  -e NAMESPACE=windows-bsod \
+  -e TARGET_NAME=win2022-vm-hjoshi1 \
+  -e TARGET_TYPE=vm \
+  all-tests \
+  pytest tests/ -v -m "not benchmark" \
+    --ignore=tests/test_sample1.py \
+    --cleanup-all
+```
+
+Run specific test suites:
+
+```bash
+# CRUD tests only (11 tests)
+podman-compose run --rm -e NAMESPACE=windows-bsod crud-test
+
+# VUT tests only (6 tests)
+podman-compose run --rm -e NAMESPACE=windows-bsod vut-test
+
+# Chaos tests only (2 tests)
+podman-compose run --rm -e NAMESPACE=windows-bsod chaos-test
+```
+
+### Option 3: podman build + run (Direct Container Execution)
+
+Build image and run with full environment setup:
+
+```bash
+podman build -t chaos-test:latest . && \
+podman run --rm \
+  -e NAMESPACE=windows-bsod \
+  -e TARGET_NAME=win2022-vm-hjoshi1 \
+  -e TARGET_TYPE=vm \
+  -e KUBECONFIG=/root/.kube/config \
+  -v ${HOME}/.kube/config:/root/.kube/config:ro \
+  chaos-test:latest \
+  pytest tests/ -v -m "not benchmark" \
+    --ignore=tests/test_sample1.py \
+    --cleanup-all
 ```
 
 Run only benchmark-runner scenarios (requires the env vars listed under

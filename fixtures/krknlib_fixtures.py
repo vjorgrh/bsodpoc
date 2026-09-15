@@ -1,60 +1,57 @@
 """krkn-lib chaos scenario fixtures."""
-import logging
-import os
-from typing import Any, Dict, NamedTuple
+import logging  # Standard Python logging module for tracking test events
+import os  # Operating system module to access environment variables and file paths
+from typing import Any, Dict  # Type hinting utilities for clearer code definitions
 
-import pytest
+import pytest  # Pytest testing framework for defining fixtures and hooks
 
-from fixtures.common import DEFAULT_NAMESPACE
+from libs.common import DEFAULT_NAMESPACE  # Import global default namespace string from common
+from libs.krkncontext import KrknContext  # Import KrknContext from libs
 
+# Retrieve root logger instance to record fixture log messages
 logs = logging.getLogger()
 
-# Repo-wide defaults for krkn chaos scenarios. A test's @pytest.mark.krkn(...)
-# only needs to declare what differs; anything omitted falls back to these.
+# Repo-wide fallback defaults for krkn chaos scenarios.
+# If a test's @pytest.mark.krkn(...) marker doesn't specify a key, it uses these defaults.
+# All values come from environment variables (no hardcoded values)
 KRKN_DEFAULTS: Dict[str, Any] = {
-    "namespace": DEFAULT_NAMESPACE,
-    "vmName": "hjoshi-win2022",
-    "recoverTimeout": 300,
+    "namespace": DEFAULT_NAMESPACE,  # From NAMESPACE environment variable
+    "vmName": os.environ.get("TARGET_NAME"),  # From TARGET_NAME environment variable
+    "recoverTimeout": 300,  # Default recovery time SLA in seconds (5 minutes)
 }
 
 
-class KrknContext(NamedTuple):
-    """Bundle handed to a test: the krkn-lib client plus the marker's parameters."""
-    client: Any                 # krkn_lib.k8s.KrknKubernetes instance
-    params: Dict[str, Any]      # KRKN_DEFAULTS merged with @pytest.mark.krkn(...) kwargs
+# KrknContext class has been moved to libs/krkncontext.py and imported above
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="function")  # Define a Pytest fixture that runs fresh for every individual test function
 def krknChaos(request):
-    """Provide a krkn-lib chaos client to a test and read its @pytest.mark.krkn(...) params.
-
-    Pair this fixture with the custom ``krkn`` marker: the marker *declares* which
-    chaos scenario a test wants (and any parameters), and this fixture *builds the
-    client* the test uses to run it, e.g.::
-
-        @pytest.mark.krkn(scenario="pod-kill", labelSelector="kubevirt.io=virt-launcher")
-        def test_vmSurvivesVirtLauncherKill(self, vmCreate, krknChaos):
-            client = krknChaos.client            # krkn_lib KrknKubernetes
-            scenario = krknChaos.params["scenario"]
-            ...
-
-    The scenario logic itself (select pods -> kill -> wait -> assert recovery) is
-    written in the test on top of krkn-lib primitives such as
-    ``client.select_pods_by_label(...)`` and ``client.delete_pod(...)``.
-    """
-    # Import lazily so the rest of the suite still collects when krkn-lib is absent.
+    """Provide a krkn-lib chaos client to a test and read its @pytest.mark.krkn(...) params."""
+    
+    # LAZY IMPORT: Import KrknKubernetes inside the fixture function rather than at the top of the file.
+    # This prevents Pytest collection errors if krkn-lib is not installed in the execution environment.
     from krkn_lib.k8s import KrknKubernetes
 
+    # Read the custom `@pytest.mark.krkn(...)` marker attached to the running test function
     marker = request.node.get_closest_marker("krkn")
-    # Marker kwargs override the repo-wide defaults; a test declares only the diff.
+    
+    # Merge dictionary parameters:
+    # Starts with KRKN_DEFAULTS and overrides them with any keyword arguments passed in the marker.
     params = {**KRKN_DEFAULTS, **(marker.kwargs if marker else {})}
 
+    # Resolve KUBECONFIG path: check $KUBECONFIG environment variable first, fallback to ~/.kube/config
     kubeconfigPath = os.environ.get("KUBECONFIG") or os.path.expanduser("~/.kube/config")
+    
+    # Log the kubeconfig path being used to initialize the client
     logs.info(f"Initialising krkn-lib client with kubeconfig: {kubeconfigPath}")
+    
+    # Instantiate the krkn-lib Kubernetes API client object using the resolved kubeconfig
     client = KrknKubernetes(kubeconfig_path=kubeconfigPath)
 
+    # YIELD / SETUP FINISHED:
+    # Pause fixture execution here and hand the KrknContext (client + parameters) to the test function.
     yield KrknContext(client=client, params=params)
 
-    # Teardown: scenario-specific state restoration belongs to the individual test
-    # (this fixture only provides the client + params, per "fixture + marker only").
-    logs.info("krknChaos fixture teardown complete")
+    # TEARDOWN PHASE:
+    # Automatically executes after the test case finishes (whether it passed, failed, or threw an error).
+    logs.info("krknChaos fixture teardown complete")  # Log fixture cleanup completion

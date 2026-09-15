@@ -1,0 +1,115 @@
+# Docker Compose configuration for Podman/Docker
+# Test chaos scenarios against multiple targets
+#
+# Prerequisites:
+#   - KUBECONFIG environment variable set or ~/.kube/config exists
+#   - kubectl/oc CLI configured with cluster access
+#   - Cluster KubeVirt version: v1.8.4 (update Dockerfile if cluster version differs)
+#   - virtctl version in container MUST match cluster KubeVirt version
+#
+# Usage:
+#   podman-compose run all-tests                # Run all tests (VUT + CRUD + Chaos, excluding benchmark)
+#   podman-compose run vut-test                 # Run VUT tests only
+#   podman-compose run crud-test                # Run CRUD tests only
+#   podman-compose run chaos-test               # Run Chaos tests only
+#   NAMESPACE=custom-ns podman-compose run all-tests  # Override namespace
+#
+# Version Management:
+#   1. Check cluster KubeVirt version: oc get hco -n openshift-cnv -o jsonpath='{.items[0].status.version}'
+#   2. Update Dockerfile line 31 with matching virtctl version
+#   3. Rebuild image: podman build -t chaos-test:latest .
+#   4. Run tests: podman-compose run --rm all-tests
+#
+# Troubleshooting:
+#   - Version mismatch error? Check cluster version and rebuild image with matching virtctl
+#   - kubeconfig errors? Ensure ~/.kube/config is readable
+#   - Auto-cleanup on success removes all test-created VMs/DVs
+#   - Manual cleanup: oc delete vm,dv -n windows-bsod -l 'name in (win2022-vm-clone, win2022-vm-scale, win2022-vm-multi, win2022-vm-delete, win2022-vm-lifecycle)' --ignore-not-found=true
+
+version: '3.8'
+
+services:
+  # Base service with common configuration
+  chaos-base: &chaos-base
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: chaos-test:latest
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      KUBECONFIG: /root/.kube/config
+      # Suppress virtctl version warnings (expected in test environments)
+      VIRTCTL_IGNORE_VERSION_MISMATCH: "false"
+    volumes:
+      # Mount kubeconfig for Kubernetes access
+      - ~/.kube/config:/root/.kube/config:ro
+    networks:
+      - chaos-testing
+    restart: "no"
+    entrypoint: []
+    # Health check to verify test environment is ready
+    healthcheck:
+      test: ["CMD", "python", "-c", "import pytest; print('ready')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  # Primary service: Run all tests (VUT + CRUD + Chaos) except benchmark
+  all-tests:
+    <<: *chaos-base
+    container_name: all-tests
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      KUBECONFIG: /root/.kube/config
+      NAMESPACE: ${NAMESPACE:-windows-bsod}
+      TARGET_NAME: ${TARGET_NAME:-win2022-vm-hjoshi1}
+      TARGET_TYPE: vm
+    command: ["pytest", "tests/", "-v", "-m", "not benchmark"]
+
+  # Service: VUT tests only (krkn-lib VM management)
+  vut-test:
+    <<: *chaos-base
+    container_name: vut-test
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      KUBECONFIG: /root/.kube/config
+      NAMESPACE: ${NAMESPACE:-windows-bsod}
+      TARGET_NAME: ${TARGET_NAME:-win2022-vm-hjoshi1}
+      TARGET_TYPE: vm
+    command: ["pytest", "tests/test_vut.py", "-v", "-m", "krkn and not benchmark"]
+
+  # Service: VM CRUD tests only
+  crud-test:
+    <<: *chaos-base
+    container_name: crud-test
+    volumes:
+     - ${HOME}/.kube/config:/root/.kube/config:ro
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      KUBECONFIG: /root/.kube/config
+      NAMESPACE: ${NAMESPACE:-windows-bsod}
+      TARGET_NAME: ${TARGET_NAME:-win2022-vm-hjoshi1}
+      TARGET_TYPE: vm
+    command: ["pytest", "tests/test_vm_crud.py", "-v", "-m", "not benchmark"]
+
+  # Service: Chaos tests only
+  chaos-test:
+    <<: *chaos-base
+    container_name: chaos-test
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      KUBECONFIG: /root/.kube/config
+      NAMESPACE: ${NAMESPACE:-windows-bsod}
+      TARGET_NAME: ${TARGET_NAME:-win2022-vm-hjoshi1}
+      TARGET_TYPE: vm
+    command: ["pytest", "tests/test_chaos.py", "-v", "-m", "not benchmark"]
+
+networks:
+  chaos-testing:
+    driver: bridge
