@@ -1,6 +1,6 @@
 pytest_plugins = [
-    "fixtures.vm_fixtures",
-    "fixtures.krknlib_fixtures",
-    "fixtures.tunnel_fixtures",
-    "fixtures.benchmark_runner_fixtures",
+    'fixtures.vm',
+    'fixtures.krknlib',
+    'fixtures.tunnel',
+    'fixtures.benchmark_runner',
 ]

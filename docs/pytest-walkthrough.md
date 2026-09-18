@@ -77,7 +77,7 @@ def vm_create(request):
                 shell=True,
             )
     
-    yield results  # TEST RUNS HERE — receives dict of {vmName: CommandResult}
+    yield results  # TEST RUNS HERE — receives dict of {vmName: CmdRes}
     
     # TEARDOWN: delete all VMs created above
     for vm_name in results:
@@ -88,7 +88,7 @@ def vm_create(request):
 **How to use it in a test:**
 ```python
 def test_something(vm_create):
-    # vm_create is now a dict: {"bsod-auto-742": CommandResult(...)}
+    # vm_create is now a dict: {"bsod-auto-742": CmdRes(...)}
     for vmName in vm_create:
         print(f"VM created: {vmName}")
     # After test completes, conftest.py automatically deletes the VMs
@@ -467,15 +467,15 @@ It proves the plumbing works for host-side injection. When you want to inject vC
 
 ## Part 4: Supporting Libraries
 
-### libs/command_runner.py
+### libs/CmdExec.py
 ```python
-class CommandRunner:
-    def run(self, cmd, shell=False, retries=1):
-        """Run a command (via shell or list), return CommandResult."""
-        # Returns: CommandResult(success, stdout, stderr, returncode)
+class CmdExec:
+    def Run(self, command, shell=False, stdin=None, tryMax=None):
+        """Run a command (via shell or list), return CmdRes."""
+        # Returns: CmdRes(stdout, stderr, exitCode, success)
 ```
 
-Used everywhere: `runner.run("oc get vm ...", shell=True)`
+Used everywhere: `runner.Run("oc get vm ...", shell=True)`
 
 ---
 
@@ -498,7 +498,7 @@ class VirtctlSSH:
     def __init__(self, vmName, namespace, username, identityFile):
         ...
     
-    def executeRemoteCommand(self, remoteCmd) -> CommandResult:
+    def executeRemoteCommand(self, remoteCmd) -> CmdRes:
         """SSH into the guest via virtctl, run a command."""
         # Used by test_sample1.py to reach inside the guest
 ```
@@ -514,13 +514,13 @@ class VirtctlSshTunnel:
     def ensure(self):
         """Establish ControlMaster tunnel if not alive."""
     
-    def runPowershell(self, script: str) -> CommandResult:
+    def runPowershell(self, script: str) -> CmdRes:
         """Run PowerShell over the tunnel."""
     
-    def send(self, localPath, remotePath) -> CommandResult:
+    def send(self, localPath, remotePath) -> CmdRes:
         """Upload file."""
     
-    def receive(self, remotePath, localPath) -> CommandResult:
+    def receive(self, remotePath, localPath) -> CmdRes:
         """Download file."""
     
     def close(self):

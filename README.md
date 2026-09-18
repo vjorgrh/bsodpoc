@@ -10,8 +10,8 @@ library (single VM or scaled across nodes) — reaches into guests over
 ## Layout
 
 - `libs/` — helper modules:
-  - `command_runner.py` — `CommandRunner`, a retry-wrapped `subprocess` runner
-    returning a structured `CommandResult`.
+  - `CmdExec.py` — `CmdExec`, a retry-wrapped `subprocess` runner
+    returning a structured `CmdRes`.
   - `vm.py` — `VirtctlSSH`, runs commands inside a guest via `virtctl ssh`.
   - `yaml_parser.py` — `ConfigLoader.loadAndSave`, renders a YAML template's
     `${VAR}` placeholders and writes the result.

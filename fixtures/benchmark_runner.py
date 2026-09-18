@@ -1,4 +1,4 @@
-"""benchmark-runner fixtures: real OC client + Windows VM provisioning (single and scale)."""
+'''benchmark-runner fixtures: real OC client + Windows VM provisioning (single and scale).'''
 import logging
 import os
 import tempfile
@@ -16,20 +16,20 @@ class WindowsVMScale(WindowsVM):
         super()._initialize_run()
         self._name = self._name.removesuffix('_scale')
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope='session')
 def oc():
-    """
+    '''
     SingletonOCLogin logs in once per process and caches it,so this
     (and any workload class that builds its own OC internally) shares
     a single login.
-    """
+    '''
     #check kubeconfig option of doing it
     from benchmark_runner.common.oc.oc import OC
-    return OC(kubeadmin_password=os.environ["KUBEADMIN_PASSWORD"])
+    return OC(kubeadmin_password=os.environ['KUBEADMIN_PASSWORD'])
 
 @pytest.fixture
 def windowsVMScale(oc, request):
-    """
+    '''
     Creates single/multiple VM's in the cluster using benchmark runner
     Number of VM's to create is a param to a fixture
     This fixture refers to below environment variables:
@@ -42,14 +42,14 @@ def windowsVMScale(oc, request):
                 Set to False if no exisitng object are to be removed
     RUN_ARTIFACTS_PATH: The path where log and yaml file will be generated
                         If not provided a temp directory is created
-    """
+    '''
     from benchmark_runner.main.environment_variables import environment_variables
     from benchmark_runner.main.temporary_environment_variables import TemporaryEnvironmentVariables
     from benchmark_runner.workloads.workloads_operations import WorkloadsOperations
 
     # Accept both (count, namespace) and a bare count.
-    scale = getattr(request, "param", 1)
-    logs.info(f"Create {scale} vm")
+    scale = getattr(request, 'param', 1)
+    logs.info(f'Create {scale} vm')
     vmNames = []
     with TemporaryEnvironmentVariables():
         env = environment_variables.environment_variables_dict
@@ -60,8 +60,8 @@ def windowsVMScale(oc, request):
         logs.info(f"Run artifcats path: {env['run_artifacts_path']}")
         env['namespace'] = env.get('namespace') or DEFAULT_NAMESPACE
         if scale > 1:
-           workload = "windows_vm_scale"
-           scale_nodes = [os.environ.get("WORKER_NODE")]
+           workload = 'windows_vm_scale'
+           scale_nodes = [os.environ.get('WORKER_NODE')]
            env['workload'] = workload
            env['scale'] = str(scale)
            env['scale_nodes'] = str(scale_nodes)
@@ -69,7 +69,7 @@ def windowsVMScale(oc, request):
                name = '-'.join([workload.removesuffix('_scale').replace('_', '-'), env.get('trunc_uuid'),str(i)])
                vmNames.append(name)
         else:
-           workload = "windows_vm"
+           workload = 'windows_vm'
            env['workload'] = workload
            name = '-'.join([workload.replace('_', '-'), env.get('trunc_uuid')])
            vmNames.append(name)
@@ -81,6 +81,6 @@ def windowsVMScale(oc, request):
 
 @pytest.fixture
 def vmTunnel(windowsVMScale, sshTunnelConnection):
-    """Composes windowsVMScale + sshTunnelConnection: one SSH tunnel per created VM."""
-    iFile = Path(os.environ.get('RUN_ARTIFACTS_PATH') + "/ssh/vm_key")
+    '''Composes windowsVMScale + sshTunnelConnection: one SSH tunnel per created VM.'''
+    iFile = Path(os.environ.get('RUN_ARTIFACTS_PATH') + '/ssh/vm_key')
     return {vmName: sshTunnelConnection(identityFile=iFile, vmName=vmName) for vmName in windowsVMScale}
