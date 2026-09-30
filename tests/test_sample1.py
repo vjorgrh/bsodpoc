@@ -14,7 +14,6 @@ TUNNEL_SKIP_REASON = (
     "Vijay is working on it "
 )
 
-
 class TestExample():
      """Test class for BSOD tests"""
 
@@ -45,7 +44,7 @@ class TestExample():
      def test_vm_create_tunnel(self, sshTunnelConnection):
          """Times repeated PowerShell calls over one reused ControlMaster tunnel."""
          logs.info("This is tunnel check test")
-         tunnel = sshTunnelConnection("win2022-vm-vvijay11", "windows-bsod")
+         tunnel = sshTunnelConnection("win2022-vm-vvijay11", "benchmark-runner")
 
          start = time.perf_counter()
          result = tunnel.runPowershell("Get-ComputerInfo | Select-Object CsName")
@@ -72,20 +71,6 @@ class TestExample():
          end = time.perf_counter()
          logs.info(f"Time took to execute: {end-start}")
          assert result.success
-
-     @pytest.mark.tunnel
-     @pytest.mark.skip(reason=TUNNEL_SKIP_REASON)
-     @pytest.mark.parametrize("vmCreate", [(2, "windows-bsod")], indirect=True)
-     def test_vm_tunnel(self, vmWithTunnel):
-         """One tunnel per freshly created VM: exec + upload + download on each."""
-         logs.info("This is tunnel test")
-         for vmName, tunnel in vmWithTunnel.items():
-            result = tunnel.runPowershell("Get-ComputerInfo | Select-Object CsName")
-            assert result.success
-            result = tunnel.send("/Users/vvijay/scripts/guest/churn.ps1", "C:/scripts/")
-            assert result.success
-            result = tunnel.receive("C:/scripts/churn.ps1", "/Users/vvijay/scripts/check")
-            assert result.success
 
      @pytest.mark.benchmark
      @pytest.mark.skip(reason=TUNNEL_SKIP_REASON)

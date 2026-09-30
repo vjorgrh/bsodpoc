@@ -28,11 +28,11 @@ def sshTunnelConnection(request):
     """Creates VirtctlSshTunnel instances for VMs under test; closes them all at teardown."""
     tunnels: list[VirtctlSshTunnel] = []
 
-    def _make(vmName: str, namespace: str = DEFAULT_NAMESPACE) -> VirtctlSshTunnel:
+    def _make(identityFile: Path, vmName: str, namespace: str = DEFAULT_NAMESPACE) -> VirtctlSshTunnel:
         tunnel = VirtctlSshTunnel(
             target=f"Administrator@vm/{vmName}",
             namespace=namespace,
-            identityFile=str(Path.home() / ".ssh" / "id_ed25519"),
+            identityFile=str(identityFile),
             binPath=findVirtctlPath(),
             kubeconfig=os.environ.get("KUBECONFIG"),
         )
