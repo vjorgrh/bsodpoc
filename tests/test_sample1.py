@@ -4,7 +4,7 @@ import time
 
 from libs.vm import VirtctlSSH
 
-logs = logging.getLogger()
+logs = logging.getLogger(__name__)
 
 # vvijay's tunnel scenarios below reference paths on their own workstation
 # (/Users/vvijay/...) and the VM "win2022-vm-vvijay11", which is not present on

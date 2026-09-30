@@ -5,7 +5,7 @@ from typing import Any, Dict, NamedTuple
 
 from libs.common import DEFAULT_NAMESPACE
 
-logs = logging.getLogger()
+logs = logging.getLogger(__name__)
 
 
 class KrknContext(NamedTuple):

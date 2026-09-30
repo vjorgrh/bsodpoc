@@ -10,7 +10,7 @@ import pytest
 
 from libs.vmundertest import VmUnderTest
 
-logs = logging.getLogger()
+logs = logging.getLogger(__name__)
 
 
 @pytest.fixture

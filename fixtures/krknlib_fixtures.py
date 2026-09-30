@@ -9,7 +9,7 @@ from libs.common import DEFAULT_NAMESPACE  # Import global default namespace str
 from libs.krkncontext import KrknContext  # Import KrknContext from libs
 
 # Retrieve root logger instance to record fixture log messages
-logs = logging.getLogger()
+logs = logging.getLogger(__name__)
 
 # Repo-wide fallback defaults for krkn chaos scenarios.
 # If a test's @pytest.mark.krkn(...) marker doesn't specify a key, it uses these defaults.

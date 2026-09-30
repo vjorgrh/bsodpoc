@@ -2,7 +2,7 @@
 import logging
 from typing import Optional
 
-logs = logging.getLogger()
+logs = logging.getLogger(__name__)
 
 
 class VmUnderTest:

@@ -5,7 +5,7 @@ import tempfile
 
 import pytest
 
-logs = logging.getLogger()
+logs = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="session")

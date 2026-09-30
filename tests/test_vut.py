@@ -9,7 +9,7 @@ import logging
 
 import pytest
 
-logs = logging.getLogger()
+logs = logging.getLogger(__name__)
 
 
 @pytest.mark.krkn

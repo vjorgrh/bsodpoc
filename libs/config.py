@@ -13,7 +13,7 @@ import logging
 from functools import lru_cache
 from typing import Optional
 
-logs = logging.getLogger()
+logs = logging.getLogger(__name__)
 
 
 class KrknConfig:

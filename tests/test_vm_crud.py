@@ -3,7 +3,7 @@ import logging
 import pytest
 import time
 
-logs = logging.getLogger()
+logs = logging.getLogger(__name__)
 
 
 @pytest.mark.krkn(namespace="windows-bsod")
