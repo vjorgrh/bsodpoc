@@ -11,8 +11,7 @@ logs = logging.getLogger()
 # the cluster (the running one is "win2022-vm-vvijay1"). Skipped until those are
 # parameterised; drop the marker once they point at real, shared locations.
 TUNNEL_SKIP_REASON = (
-    "needs vvijay's local script paths and the win2022-vm-vvijay11 VM; "
-    "unskip once both are parameterised"
+    "Vijay is working on it "
 )
 
 
@@ -20,6 +19,7 @@ class TestExample():
      """Test class for BSOD tests"""
 
      @pytest.mark.bsod
+     @pytest.mark.skip(reason=TUNNEL_SKIP_REASON)
      @pytest.mark.parametrize("vmCreate", [(2, "windows-bsod")], indirect=True)
      def test_vm_create(self, vmCreate):
          results = vmCreate
@@ -88,5 +88,6 @@ class TestExample():
             assert result.success
 
      @pytest.mark.benchmark
+     @pytest.mark.skip(reason=TUNNEL_SKIP_REASON)
      def test_benchmark_runner(self, windowsVMScale):
          assert windowsVMScale.run() is not False

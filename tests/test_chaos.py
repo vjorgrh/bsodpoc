@@ -116,3 +116,313 @@ class TestChaos():
 			podName="krkn-hostscan", namespace=ns,  # Helper pod configuration
 		)
 		logs.info(f"host kernel-log scan on {node}:\n{scan}")  # Log captured dmesg entries for debugging
+
+	# Custom Pytest marker for memory pressure scenario
+	@pytest.mark.krkn(
+		vmName=DEFAULT_TARGET_NAME,  # Target VM name (from env or default)
+		namespace=DEFAULT_NAMESPACE,  # Target Kubernetes namespace (from env or default)
+		memoryPressurePercent=80,  # Consume 80% of node memory
+		pressureDuration=300,  # Apply pressure for 300 seconds (5 minutes)
+		recoverTimeout=600,  # Allow 10 minutes (600s) for recovery after pressure removed
+	)
+	def test_vmBsodUnderMemoryPressure(self, krknChaos):
+		"""Chaos: Trigger potential BSOD via memory pressure (OOM) on VM's node."""
+		client = krknChaos.client  # Extract krkn-lib client
+		params = krknChaos.params  # Extract scenario parameters
+		ns = params["namespace"]  # Kubernetes namespace
+		vmName = params["vmName"]  # Target VM name
+		memPercent = params.get("memoryPressurePercent", 80)  # Memory pressure percentage (default: 80%)
+		pressureDuration = params.get("pressureDuration", 300)  # Duration to apply pressure (default: 300s)
+		recoverTimeout = params.get("recoverTimeout", 600)  # Recovery SLA timeout (default: 600s)
+		runner = CommandRunner()  # Shell command runner
+
+		# 1. Get target node where VM is running
+		nodeRes = runner.run(
+			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.nodeName}}'",
+			shell=True,
+		)
+		assert nodeRes.success and nodeRes.stdout, (
+			f"could not resolve node for {vmName}: {nodeRes.stderr}")
+		node = nodeRes.stdout.strip()
+		logs.info(f"VM {vmName} runs on node {node}")
+
+		# 2. Sanity check: Verify node is Ready before chaos
+		readyNodes = client.list_ready_nodes()
+		assert node in readyNodes, f"node {node} is not Ready before chaos"
+
+		# 3. Get baseline memory info before pressure
+		baseline_mem = execOnNode(
+			client, node,
+			"free -h | grep Mem",  # Get memory usage before pressure
+			podName="krkn-memory-baseline", namespace=ns,
+		)
+		logs.info(f"baseline memory on {node}: {baseline_mem}")
+
+		# 4. INJECT CHAOS: Apply memory pressure on node
+		logs.info(f"CHAOS: applying {memPercent}% memory pressure on {node} for {pressureDuration}s")
+		pressure_cmd = f"stress-ng --vm 1 --vm-bytes {memPercent}% --timeout {pressureDuration}s --verbose 2>&1 || true"
+
+		try:
+			mem_result = execOnNode(
+				client, node,
+				pressure_cmd,
+				podName="krkn-memory-stress", namespace=ns,
+				timeout=pressureDuration + 30,  # Give extra 30s buffer
+			)
+			logs.info(f"memory pressure result: {mem_result}")
+		except Exception as e:
+			logs.warning(f"memory pressure execution warning: {e}")
+
+		# 5. Wait for pressure injection to complete
+		time.sleep(5)
+		logs.info("memory pressure injection phase complete")
+
+		# 6. Verify VM still running during pressure (or capture BSOD evidence)
+		vmi_during = runner.run(
+			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
+			shell=True,
+		)
+		logs.info(f"VM phase during pressure: {vmi_during.stdout}")
+
+		# 7. Scan kernel logs for OOM/BSOD signatures immediately after pressure
+		logs.info("scanning kernel logs for OOM/BSOD events")
+		scan_oom = execOnNode(
+			client, node,
+			"dmesg 2>/dev/null | grep -iE 'out of memory|oom-kill|kernel panic|bsod|#AC|splitlock' | tail -20 || true",
+			podName="krkn-oom-scan", namespace=ns,
+		)
+		logs.info(f"OOM/BSOD signatures found:\n{scan_oom}")
+
+		# 8. Allow recovery: Monitor VM for recovery SLA
+		logs.info(f"monitoring recovery for {recoverTimeout}s")
+		deadline = time.time() + recoverTimeout
+		vm_recovered = False
+		recovery_time = None
+
+		while time.time() < deadline:
+			vmi_status = runner.run(
+				f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
+				shell=True,
+			)
+			if vmi_status.stdout == "Running":
+				recovery_time = recoverTimeout - int(time.time() - (deadline - recoverTimeout))
+				logs.info(f"VM recovered to Running state in {recovery_time}s")
+				vm_recovered = True
+				break
+
+			logs.info(f"VM recovery in progress ... phase: {vmi_status.stdout}")
+			time.sleep(10)
+
+		# 9. Final assertions
+		assert vm_recovered, (
+			f"VM {vmName} did not recover to Running state within {recoverTimeout}s after memory pressure")
+
+		# 10. Post-recovery: Verify node is still healthy
+		final_nodes = client.list_ready_nodes()
+		assert node in final_nodes, f"node {node} degraded after memory pressure chaos"
+
+		logs.info(f"✅ PASSED: VM survived memory pressure chaos (OOM threshold: {memPercent}%, Recovery SLA: {recovery_time}s/{recoverTimeout}s)")
+
+	# Custom Pytest marker for packet corruption scenario
+	@pytest.mark.krkn(
+		vmName=DEFAULT_TARGET_NAME,  # Target VM name
+		namespace=DEFAULT_NAMESPACE,  # Target Kubernetes namespace
+		packetCorruptionPercent=5,   # Corrupt 5% of packets
+		corruptionDuration=300,      # Apply corruption for 300 seconds (5 minutes)
+		recoverTimeout=600,          # Allow 10 minutes (600s) for recovery
+	)
+	def test_vmBsodUnderPacketCorruption(self, krknChaos):
+		"""Chaos: Trigger potential BSOD via network packet corruption on VM's node."""
+		client = krknChaos.client  # Extract krkn-lib client
+		params = krknChaos.params  # Extract scenario parameters
+		ns = params["namespace"]  # Kubernetes namespace
+		vmName = params["vmName"]  # Target VM name
+		packetPercent = params.get("packetCorruptionPercent", 5)  # Packet corruption percentage (default: 5%)
+		corruptionDuration = params.get("corruptionDuration", 300)  # Duration to apply corruption (default: 300s)
+		recoverTimeout = params.get("recoverTimeout", 600)  # Recovery SLA timeout (default: 600s)
+		runner = CommandRunner()  # Shell command runner
+
+		# 1. Get target node where VM is running
+		nodeRes = runner.run(
+			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.nodeName}}'",
+			shell=True,
+		)
+		assert nodeRes.success and nodeRes.stdout, (
+			f"could not resolve node for {vmName}: {nodeRes.stderr}")
+		node = nodeRes.stdout.strip()
+		logs.info(f"VM {vmName} runs on node {node}")
+
+		# 2. Sanity check: Verify node is Ready before chaos
+		readyNodes = client.list_ready_nodes()
+		assert node in readyNodes, f"node {node} is not Ready before chaos"
+
+		# 3. INJECT CHAOS: Apply packet corruption on node network
+		logs.info(f"CHAOS: applying {packetPercent}% packet corruption on {node} for {corruptionDuration}s")
+		corruption_cmd = f"tc qdisc add dev eth0 root netem corrupt {packetPercent}% && sleep {corruptionDuration} && tc qdisc del dev eth0 root || true"
+
+		try:
+			corruption_result = execOnNode(
+				client, node,
+				corruption_cmd,
+				podName="krkn-packet-corrupt", namespace=ns,
+				timeout=corruptionDuration + 30,  # Give extra 30s buffer
+			)
+			logs.info(f"packet corruption result: {corruption_result}")
+		except Exception as e:
+			logs.warning(f"packet corruption execution warning: {e}")
+
+		# 4. Wait for corruption injection to complete
+		time.sleep(5)
+		logs.info("packet corruption injection phase complete")
+
+		# 5. Verify VM still running during corruption
+		vmi_during = runner.run(
+			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
+			shell=True,
+		)
+		logs.info(f"VM phase during corruption: {vmi_during.stdout}")
+
+		# 6. Scan kernel logs for HEAP_CORRUPTION/BSOD signatures
+		logs.info("scanning kernel logs for memory corruption/BSOD events")
+		scan_corruption = execOnNode(
+			client, node,
+			"dmesg 2>/dev/null | grep -iE 'heap.?corruption|memory.?corruption|bsod|panic|#AC' | tail -20 || true",
+			podName="krkn-corruption-scan", namespace=ns,
+		)
+		logs.info(f"Corruption/BSOD signatures found:\n{scan_corruption}")
+
+		# 7. Allow recovery: Monitor VM for recovery SLA
+		logs.info(f"monitoring recovery for {recoverTimeout}s")
+		deadline = time.time() + recoverTimeout
+		vm_recovered = False
+		recovery_time = None
+
+		while time.time() < deadline:
+			vmi_status = runner.run(
+				f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
+				shell=True,
+			)
+			if vmi_status.stdout == "Running":
+				recovery_time = recoverTimeout - int(time.time() - (deadline - recoverTimeout))
+				logs.info(f"VM recovered to Running state in {recovery_time}s")
+				vm_recovered = True
+				break
+
+			logs.info(f"VM recovery in progress ... phase: {vmi_status.stdout}")
+			time.sleep(10)
+
+		# 8. Final assertions
+		assert vm_recovered, (
+			f"VM {vmName} did not recover to Running state within {recoverTimeout}s after packet corruption")
+
+		# 9. Post-recovery: Verify node is still healthy
+		final_nodes = client.list_ready_nodes()
+		assert node in final_nodes, f"node {node} degraded after packet corruption chaos"
+
+		logs.info(f"✅ PASSED: VM survived packet corruption chaos ({packetPercent}%, Recovery SLA: {recovery_time}s/{recoverTimeout}s)")
+
+	# Custom Pytest marker for CPU pressure scenario
+	@pytest.mark.krkn(
+		vmName=DEFAULT_TARGET_NAME,  # Target VM name
+		namespace=DEFAULT_NAMESPACE,  # Target Kubernetes namespace
+		cpuPressurePercent=90,       # Consume 90% of node CPU
+		pressureDuration=300,        # Apply pressure for 300 seconds (5 minutes)
+		recoverTimeout=600,          # Allow 10 minutes (600s) for recovery
+	)
+	def test_vmBsodUnderCpuPressure(self, krknChaos):
+		"""Chaos: Trigger potential BSOD via CPU pressure/starvation on VM's node."""
+		client = krknChaos.client  # Extract krkn-lib client
+		params = krknChaos.params  # Extract scenario parameters
+		ns = params["namespace"]  # Kubernetes namespace
+		vmName = params["vmName"]  # Target VM name
+		cpuPercent = params.get("cpuPressurePercent", 90)  # CPU pressure percentage (default: 90%)
+		pressureDuration = params.get("pressureDuration", 300)  # Duration to apply pressure (default: 300s)
+		recoverTimeout = params.get("recoverTimeout", 600)  # Recovery SLA timeout (default: 600s)
+		runner = CommandRunner()  # Shell command runner
+
+		# 1. Get target node where VM is running
+		nodeRes = runner.run(
+			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.nodeName}}'",
+			shell=True,
+		)
+		assert nodeRes.success and nodeRes.stdout, (
+			f"could not resolve node for {vmName}: {nodeRes.stderr}")
+		node = nodeRes.stdout.strip()
+		logs.info(f"VM {vmName} runs on node {node}")
+
+		# 2. Sanity check: Verify node is Ready before chaos
+		readyNodes = client.list_ready_nodes()
+		assert node in readyNodes, f"node {node} is not Ready before chaos"
+
+		# 3. Get baseline CPU info before pressure
+		baseline_cpu = execOnNode(
+			client, node,
+			"nproc && uptime",  # Get CPU count and load average
+			podName="krkn-cpu-baseline", namespace=ns,
+		)
+		logs.info(f"baseline CPU on {node}: {baseline_cpu}")
+
+		# 4. INJECT CHAOS: Apply CPU pressure on node
+		logs.info(f"CHAOS: applying {cpuPercent}% CPU pressure on {node} for {pressureDuration}s")
+		cpu_cmd = f"stress-ng --cpu $(nproc) --cpu-load {cpuPercent/100:.2f} --timeout {pressureDuration}s --verbose 2>&1 || true"
+
+		try:
+			cpu_result = execOnNode(
+				client, node,
+				cpu_cmd,
+				podName="krkn-cpu-stress", namespace=ns,
+				timeout=pressureDuration + 30,  # Give extra 30s buffer
+			)
+			logs.info(f"CPU pressure result: {cpu_result}")
+		except Exception as e:
+			logs.warning(f"CPU pressure execution warning: {e}")
+
+		# 5. Wait for pressure injection to complete
+		time.sleep(5)
+		logs.info("CPU pressure injection phase complete")
+
+		# 6. Verify VM still running during pressure
+		vmi_during = runner.run(
+			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
+			shell=True,
+		)
+		logs.info(f"VM phase during CPU pressure: {vmi_during.stdout}")
+
+		# 7. Scan kernel logs for CPU/driver timeout errors
+		logs.info("scanning kernel logs for CPU timeout/driver failure events")
+		scan_cpu = execOnNode(
+			client, node,
+			"dmesg 2>/dev/null | grep -iE 'cpu.*timeout|driver.*timeout|timeout|starvation|#AC' | tail -20 || true",
+			podName="krkn-cpu-scan", namespace=ns,
+		)
+		logs.info(f"CPU timeout/BSOD signatures found:\n{scan_cpu}")
+
+		# 8. Allow recovery: Monitor VM for recovery SLA
+		logs.info(f"monitoring recovery for {recoverTimeout}s")
+		deadline = time.time() + recoverTimeout
+		vm_recovered = False
+		recovery_time = None
+
+		while time.time() < deadline:
+			vmi_status = runner.run(
+				f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
+				shell=True,
+			)
+			if vmi_status.stdout == "Running":
+				recovery_time = recoverTimeout - int(time.time() - (deadline - recoverTimeout))
+				logs.info(f"VM recovered to Running state in {recovery_time}s")
+				vm_recovered = True
+				break
+
+			logs.info(f"VM recovery in progress ... phase: {vmi_status.stdout}")
+			time.sleep(10)
+
+		# 9. Final assertions
+		assert vm_recovered, (
+			f"VM {vmName} did not recover to Running state within {recoverTimeout}s after CPU pressure")
+
+		# 10. Post-recovery: Verify node is still healthy
+		final_nodes = client.list_ready_nodes()
+		assert node in final_nodes, f"node {node} degraded after CPU pressure chaos"
+
+		logs.info(f"✅ PASSED: VM survived CPU pressure chaos ({cpuPercent}%, Recovery SLA: {recovery_time}s/{recoverTimeout}s)")

@@ -108,6 +108,16 @@ services:
       NAMESPACE: ${NAMESPACE:-windows-bsod}
       TARGET_NAME: ${TARGET_NAME:-win2022-vm-hjoshi1}
       TARGET_TYPE: vm
+      # Memory Pressure Chaos Parameters
+      MEMORY_PRESSURE_PERCENT: ${MEMORY_PRESSURE_PERCENT:-80}
+      MEMORY_PRESSURE_DURATION: ${MEMORY_PRESSURE_DURATION:-300}
+      # Packet Corruption Chaos Parameters
+      PACKET_CORRUPTION_PERCENT: ${PACKET_CORRUPTION_PERCENT:-5}
+      CORRUPTION_DURATION: ${CORRUPTION_DURATION:-300}
+      # CPU Pressure Chaos Parameters
+      CPU_PRESSURE_PERCENT: ${CPU_PRESSURE_PERCENT:-90}
+      # Recovery SLA (common to all chaos tests)
+      RECOVERY_TIMEOUT: ${RECOVERY_TIMEOUT:-600}
     command: ["pytest", "tests/test_chaos.py", "-v", "-m", "not benchmark"]
 
 networks:

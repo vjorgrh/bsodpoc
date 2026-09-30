@@ -14,10 +14,14 @@ def oc():
     SingletonOCLogin logs in once per process and caches it,so this
     (and any workload class that builds its own OC internally) shares
     a single login.
+
+    Skips if benchmark_runner is not installed (only available with benchmark marker).
     """
-    #check kubeconfig option of doing it
-    from benchmark_runner.common.oc.oc import OC
-    return OC(kubeadmin_password=os.environ["KUBEADMIN_PASSWORD"])
+    try:
+        from benchmark_runner.common.oc.oc import OC
+        return OC(kubeadmin_password=os.environ["KUBEADMIN_PASSWORD"])
+    except ImportError:
+        pytest.skip("benchmark_runner not installed (only available with --benchmark marker)")
 
 
 @pytest.fixture

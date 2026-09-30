@@ -11,10 +11,12 @@ FROM python:3.11-slim as base
 WORKDIR /app
 
 # Install system dependencies (minimal, production-ready)
+# Includes: git, curl, openssh-client (for virtctl), stress-ng (for memory pressure chaos)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     openssh-client \
+    stress-ng \
     && rm -rf /var/lib/apt/lists/*
 
 # Download and install kubectl binary directly
@@ -55,9 +57,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install SSH client (required for virtctl ssh operations)
+# Install runtime dependencies (SSH client for virtctl, stress-ng for chaos)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
+    stress-ng \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy kubectl and virtctl from base stage to runtime (needed for K8s operations)
