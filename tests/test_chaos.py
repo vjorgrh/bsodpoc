@@ -6,8 +6,8 @@ import pytest  # The main Pytest testing framework used for writing and running 
 from libs.command_runner import CommandRunner  # Custom helper class to run local shell/CLI commands (like oc)
 from libs.common import get_namespace, get_target_name, execOnNode  # Helper functions for environment-based config
 
-# Retrieves the root logger instance so we can record logs (e.g., logs.info, logs.warning)
-logs = logging.getLogger()
+# Module logger for test_chaos - Red Hat compliant logging with module namespace
+logs = logging.getLogger(__name__)
 
 # Get namespace and target name from environment or use defaults
 DEFAULT_NAMESPACE = get_namespace()
@@ -42,7 +42,7 @@ class TestChaos():
 
 		# Sanity Check: Ensure the VirtualMachineInstance (VMI) is in "Running" state before injecting chaos
 		before = runner.run(
-			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'", shell=True)  # Query VMI status via oc
+			["oc", "get", "vmi", vmName, "-n", ns, "-o", "jsonpath={.status.phase}"])  # Query VMI status via oc
 		assert before.stdout == "Running", f"VM not Running before chaos: {before.stdout!r}"  # Assert VM is healthy
 
 		# 2. INJECT CHAOS: Delete the VM's backing virt-launcher pod to simulate a pod/node crash
@@ -57,8 +57,7 @@ class TestChaos():
 			current = client.list_pods(namespace=ns, label_selector=selector)  # Get current list of pods matching label
 			newPods = [p for p in current if p != originalPod]  # Filter out the killed pod to identify any new pod
 			vmiPhase = runner.run(  # Query OpenShift for current VMI phase
-				f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
-				shell=True).stdout  # Get stdout string from command result
+				["oc", "get", "vmi", vmName, "-n", ns, "-o", "jsonpath={.status.phase}"]).stdout  # Get stdout string from command result
 
 			# Check if a new pod exists, is running according to krkn-lib, and the VMI phase is "Running"
 			if newPods and client.is_pod_running(newPods[0], ns) and vmiPhase == "Running":
@@ -88,8 +87,7 @@ class TestChaos():
 
 		# 1. Resolve which worker node the target VMI is currently running on
 		nodeRes = runner.run(
-			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.nodeName}}'",  # Extract node name via oc
-			shell=True,
+			["oc", "get", "vmi", vmName, "-n", ns, "-o", "jsonpath={.status.nodeName}"],  # Extract node name via oc
 		)
 		assert nodeRes.success and nodeRes.stdout, (  # Fail test if command failed or returned empty output
 			f"could not resolve node for {vmName}: {nodeRes.stderr}")
@@ -138,8 +136,7 @@ class TestChaos():
 
 		# 1. Get target node where VM is running
 		nodeRes = runner.run(
-			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.nodeName}}'",
-			shell=True,
+			["oc", "get", "vmi", vmName, "-n", ns, "-o", "jsonpath={.status.nodeName}"],
 		)
 		assert nodeRes.success and nodeRes.stdout, (
 			f"could not resolve node for {vmName}: {nodeRes.stderr}")
@@ -179,8 +176,7 @@ class TestChaos():
 
 		# 6. Verify VM still running during pressure (or capture BSOD evidence)
 		vmi_during = runner.run(
-			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
-			shell=True,
+			["oc", "get", "vmi", vmName, "-n", ns, "-o", "jsonpath={.status.phase}"],
 		)
 		logs.info(f"VM phase during pressure: {vmi_during.stdout}")
 
@@ -201,8 +197,7 @@ class TestChaos():
 
 		while time.time() < deadline:
 			vmi_status = runner.run(
-				f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
-				shell=True,
+				["oc", "get", "vmi", vmName, "-n", ns, "-o", "jsonpath={.status.phase}"],
 			)
 			if vmi_status.stdout == "Running":
 				recovery_time = recoverTimeout - int(time.time() - (deadline - recoverTimeout))
@@ -244,8 +239,7 @@ class TestChaos():
 
 		# 1. Get target node where VM is running
 		nodeRes = runner.run(
-			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.nodeName}}'",
-			shell=True,
+			["oc", "get", "vmi", vmName, "-n", ns, "-o", "jsonpath={.status.nodeName}"],
 		)
 		assert nodeRes.success and nodeRes.stdout, (
 			f"could not resolve node for {vmName}: {nodeRes.stderr}")
@@ -277,8 +271,7 @@ class TestChaos():
 
 		# 5. Verify VM still running during corruption
 		vmi_during = runner.run(
-			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
-			shell=True,
+			["oc", "get", "vmi", vmName, "-n", ns, "-o", "jsonpath={.status.phase}"],
 		)
 		logs.info(f"VM phase during corruption: {vmi_during.stdout}")
 
@@ -299,8 +292,7 @@ class TestChaos():
 
 		while time.time() < deadline:
 			vmi_status = runner.run(
-				f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
-				shell=True,
+				["oc", "get", "vmi", vmName, "-n", ns, "-o", "jsonpath={.status.phase}"],
 			)
 			if vmi_status.stdout == "Running":
 				recovery_time = recoverTimeout - int(time.time() - (deadline - recoverTimeout))
@@ -342,8 +334,7 @@ class TestChaos():
 
 		# 1. Get target node where VM is running
 		nodeRes = runner.run(
-			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.nodeName}}'",
-			shell=True,
+			["oc", "get", "vmi", vmName, "-n", ns, "-o", "jsonpath={.status.nodeName}"],
 		)
 		assert nodeRes.success and nodeRes.stdout, (
 			f"could not resolve node for {vmName}: {nodeRes.stderr}")
@@ -383,8 +374,7 @@ class TestChaos():
 
 		# 6. Verify VM still running during pressure
 		vmi_during = runner.run(
-			f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
-			shell=True,
+			["oc", "get", "vmi", vmName, "-n", ns, "-o", "jsonpath={.status.phase}"],
 		)
 		logs.info(f"VM phase during CPU pressure: {vmi_during.stdout}")
 
@@ -405,8 +395,7 @@ class TestChaos():
 
 		while time.time() < deadline:
 			vmi_status = runner.run(
-				f"oc get vmi {vmName} -n {ns} -o jsonpath='{{.status.phase}}'",
-				shell=True,
+				["oc", "get", "vmi", vmName, "-n", ns, "-o", "jsonpath={.status.phase}"],
 			)
 			if vmi_status.stdout == "Running":
 				recovery_time = recoverTimeout - int(time.time() - (deadline - recoverTimeout))

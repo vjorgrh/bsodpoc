@@ -1,10 +1,14 @@
-"""Constants and helpers shared across fixture modules."""
+"""Constants and helpers shared across fixture modules.
+
+Provides environment-based configuration and host-side command execution
+for Kubernetes chaos testing scenarios.
+"""
 
 import os
 import logging
 import time
 
-logs = logging.getLogger()
+logs = logging.getLogger(__name__)
 
 # Default namespace constant (used as fallback throughout fixtures)
 # Must be set via NAMESPACE environment variable
@@ -60,9 +64,10 @@ def execOnNode(client, node, command, podName, namespace,
 	# Best-effort pre-clean: Delete any lingering helper pod from a previous test run
 	try:
 		client.delete_pod(podName, namespace)  # Attempt to delete pod using krkn-lib client
+		logs.debug(f"Pre-cleanup: deleted lingering pod {podName} in {namespace}")
 		time.sleep(3)  # Wait 3 seconds for cluster cleanup
-	except Exception:  # Catch and ignore errors if the pod didn't exist
-		pass
+	except Exception as e:  # Catch and ignore errors if the pod didn't exist
+		logs.debug(f"Pre-cleanup: pod {podName} did not exist (expected): {type(e).__name__}")
 
 	try:
 		# Create the privileged helper pod on the target node and wait until it is Running (up to timeout)
@@ -75,5 +80,6 @@ def execOnNode(client, node, command, podName, namespace,
 		# Guarantee teardown: This block ALWAYS runs, even if creation or execution failed/crashed
 		try:
 			client.delete_pod(podName, namespace)  # Delete the transient helper pod to clean up node
-		except Exception:  # If pod deletion fails, log a warning without crashing the entire test suite
-			logs.warning(f"could not delete helper pod {podName} in {namespace}")
+			logs.debug(f"Post-cleanup: deleted helper pod {podName} in {namespace}")
+		except Exception as e:  # If pod deletion fails, log a warning without crashing the entire test suite
+			logs.warning(f"could not delete helper pod {podName} in {namespace}: {type(e).__name__}")
