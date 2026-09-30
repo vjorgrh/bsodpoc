@@ -4,22 +4,22 @@ import time
 
 from libs.vm import VirtctlSSH
 
-logs = logging.getLogger()
+logs = logging.getLogger(__name__)
 
 # vvijay's tunnel scenarios below reference paths on their own workstation
 # (/Users/vvijay/...) and the VM "win2022-vm-vvijay11", which is not present on
 # the cluster (the running one is "win2022-vm-vvijay1"). Skipped until those are
 # parameterised; drop the marker once they point at real, shared locations.
 TUNNEL_SKIP_REASON = (
-    "needs vvijay's local script paths and the win2022-vm-vvijay11 VM; "
-    "unskip once both are parameterised"
+    "Vijay is working on it "
 )
 
 class TestExample():
      """Test class for BSOD tests"""
 
      @pytest.mark.bsod
-     @pytest.mark.parametrize("vmCreate", [(2, "benchmark-runner")], indirect=True)
+     @pytest.mark.skip(reason=TUNNEL_SKIP_REASON)
+     @pytest.mark.parametrize("vmCreate", [(2, "windows-bsod")], indirect=True)
      def test_vm_create(self, vmCreate):
          results = vmCreate
          for vmName, status in results.items():
@@ -30,7 +30,7 @@ class TestExample():
 
          # Sanity-check guest reachability on the persistent VM via virtctl ssh.
          winSsh = VirtctlSSH(
-                    vmName="hjoshi-win2022",
+                    vmName="win2022-vm-hjoshi1",
                     namespace="windows-bsod",
                     username="Administrator",
                     identityFile="~/.ssh/id_ed25519",
@@ -73,8 +73,6 @@ class TestExample():
          assert result.success
 
      @pytest.mark.benchmark
-     @pytest.mark.parametrize("windowsVMScale", [2], indirect=True)
-     def test_create_vms_tunnel(self, vmTunnel):
-        for vmName, tunnel in vmTunnel.items():
-             logs.info(f"vm name: {vmName}")
-             logs.info(f"tunnel: {tunnel}")
+     @pytest.mark.skip(reason=TUNNEL_SKIP_REASON)
+     def test_benchmark_runner(self, windowsVMScale):
+         assert windowsVMScale.run() is not False

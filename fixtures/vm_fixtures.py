@@ -8,9 +8,9 @@ import pytest
 
 from libs.command_runner import CommandRunner
 from libs.yaml_parser import ConfigLoader
-from fixtures.common import DEFAULT_NAMESPACE
+from libs.common import DEFAULT_NAMESPACE
 
-logs = logging.getLogger()
+logs = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="function")

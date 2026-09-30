@@ -27,7 +27,7 @@ class VirtctlSSH:
      def _buildBaseSshCmd(self) -> List[str]:
 
         cmd = [
-              "virtctl",
+              "/usr/local/bin/virtctl",
               "ssh",
               f"vmi/{self.vmName}",
               "-n",
