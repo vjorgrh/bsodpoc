@@ -4,16 +4,16 @@ How this repo uses [krkn-lib](https://github.com/krkn-chaos/krkn-lib) (Red Hat
 Kraken's chaos library) to drive BSOD / VM-resiliency chaos tests against Windows
 VMs on OpenShift Virtualization (KubeVirt).
 
-> TL;DR — **krkn-lib injects the fault at the pod/node level; `oc` verifies
+> TL;DR - **krkn-lib injects the fault at the pod/node level; `oc` verifies
 > recovery at the VM/VMI level.** krkn-lib understands pods and nodes, but has no
 > concept of KubeVirt `VirtualMachine`/`VirtualMachineInstance` resources.
 
 ## Requirements
 
-- Python **3.11** — krkn-lib 5.0.0 does not support newer interpreters. Use the
+- Python **3.11** - krkn-lib 5.0.0 does not support newer interpreters. Use the
   provided `.venv`.
 - `oc` and `virtctl` on `PATH`, logged in to the target cluster.
-- A valid `KUBECONFIG` (or `~/.kube/config`) — used by **both** `oc` and krkn-lib.
+- A valid `KUBECONFIG` (or `~/.kube/config`) - used by **both** `oc` and krkn-lib.
 
 ## How it's wired: fixture + marker
 
@@ -56,7 +56,7 @@ Only a small, deliberate slice of krkn-lib's ~90 methods:
 | krkn-lib call                                   | Role                                        |
 | ----------------------------------------------- | ------------------------------------------- |
 | `client.list_pods(namespace, label_selector)`   | Find the virt-launcher pod(s) behind the VM |
-| `client.delete_pod(pod, ns)`                    | **The chaos** — kill the pod                |
+| `client.delete_pod(pod, ns)`                    | **The chaos** - kill the pod                |
 | `client.is_pod_running(pod, ns)`                | Confirm the replacement pod came up         |
 | `client.list_ready_nodes()`                     | Verify the VM's node is Ready               |
 | `client.create_pod(body, ns, timeout)`          | Spin up a transient host-exec pod           |
@@ -64,7 +64,7 @@ Only a small, deliberate slice of krkn-lib's ~90 methods:
 
 ## The two scenarios (`tests/test_chaos.py`)
 
-### 1. `test_vmSurvivesVirtLauncherKill` — pod-kill + recovery
+### 1. `test_vmSurvivesVirtLauncherKill` - pod-kill + recovery
 
 Simulates a node/pod failure and asserts KubeVirt self-heals:
 
@@ -75,12 +75,12 @@ Simulates a node/pod failure and asserts KubeVirt self-heals:
    NEW launcher pod is `Running` and the VMI is back to `Running`
    (within `recoverTimeout`). With `runStrategy: Always`, KubeVirt must recover.
 
-> ⚠️ **Disruptive** — this kills the live `hjoshi-win2022` launcher pod. Skip it
+> ⚠️ **Disruptive** - this kills the live `hjoshi-win2022` launcher pod. Skip it
 > with `--deselect` when you don't want disruption (see below).
 
-### 2. `test_hostSideKernelScanOnVmNode` — host-side reach (read-only)
+### 2. `test_hostSideKernelScanOnVmNode` - host-side reach (read-only)
 
-Proves we can execute on the worker node that runs the VM — the host level where
+Proves we can execute on the worker node that runs the VM - the host level where
 TLB-flush / `HYPERVISOR_ERROR` / split-lock (#AC) signatures show up in the kernel
 log (they never reach the Windows guest dump):
 
@@ -88,7 +88,7 @@ log (they never reach the Windows guest dump):
 2. `list_ready_nodes` → sanity-check it's Ready.
 3. `execOnNode(... "uname -r")` → run a host-side command, assert output.
 4. `execOnNode(... dmesg | grep -iE 'split.?lock|#AC|hypervisor')` → scan the
-   host kernel log for BSOD-relevant signatures (logged, not asserted — a clean
+   host kernel log for BSOD-relevant signatures (logged, not asserted - a clean
    host is the healthy case).
 
 ## Division of labor: krkn-lib vs `oc`
@@ -112,7 +112,7 @@ a hand-rolled replacement for krkn-lib's `exec_command_on_node`:
    guaranteed cleanup in a `finally`.
 
 2. **Argument drop in `exec_cmd_in_pod`.** It prepends `["bash", "-c"]` to the
-   command, so a token list like `["uname", "-r"]` becomes `bash -c uname -r` —
+   command, so a token list like `["uname", "-r"]` becomes `bash -c uname -r` -
    `-r` becomes a positional param and is silently dropped.
    **Fix:** we pass the command as a **single shell string in a one-element list**,
    `[command]`, so it runs as `bash -c "<command>"`.
@@ -143,5 +143,5 @@ Always use the `.venv` interpreter so `krkn_lib` resolves:
 | `conftest.py`                 | `krknChaos` fixture, `KRKN_DEFAULTS`, `KrknContext`, `vm_create` |
 | `tests/test_chaos.py`         | The two krkn-lib chaos scenarios + `execOnNode()` helper   |
 | `libs/command_runner.py`      | Retry-wrapped `subprocess` runner (`oc` / `virtctl`)       |
-| `libs/vm.py`                  | `VirtctlSSH` — run commands inside the Windows guest       |
+| `libs/vm.py`                  | `VirtctlSSH` - run commands inside the Windows guest       |
 | `libs/yaml_parser.py`         | Render `${VAR}` placeholders in VM YAML templates          |

@@ -1,14 +1,14 @@
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
-  name: "${VM_NAME}"
+  name: "{{ vmName }}"
   namespace: windows-bsod
 spec:
   runStrategy: Always
   # Dynamically creates/clones a new PVC named after the generated VM
   dataVolumeTemplates:
     - metadata:
-        name: "${VM_NAME}"
+        name: "{{ vmName }}"
       spec:
         storage:
           resources:
@@ -22,8 +22,8 @@ spec:
   template:
     metadata:
       labels:
-        kubevirt.io/vm: "${VM_NAME}"
-        kubevirt.io/domain: "${VM_NAME}"
+        kubevirt.io/vm: "{{ vmName }}"
+        kubevirt.io/domain: "{{ vmName }}"
     spec:
       nodeSelector:
         memory-backend: enabled
@@ -95,7 +95,7 @@ spec:
       volumes:
         - name: rootdisk
           dataVolume:
-            name: "${VM_NAME}"
+            name: "{{ vmName }}"
         - name: virtiocontainerdisk
           containerDisk:
             image: container-native-virtualization/virtio-win:v4.12-1784795134

@@ -29,7 +29,7 @@
 
 ## Stress Injection Methods (krkn-lib capabilities)
 
-### 1. POD OPERATIONS — Pod-Level Chaos
+### 1. POD OPERATIONS - Pod-Level Chaos
 
 | Scenario | krkn-lib function | What happens | Expected BSOD |
 |----------|-------------------|--------------|---|
@@ -41,7 +41,7 @@
 
 ---
 
-### 2. HOST/NODE OPERATIONS — Direct Hypervisor Stress (Highest Value)
+### 2. HOST/NODE OPERATIONS - Direct Hypervisor Stress (Highest Value)
 
 | Scenario | krkn-lib function | Command | Expected BSOD | Implementation |
 |----------|-------------------|---------|---|---|
@@ -72,7 +72,7 @@ result = client.exec_command_on_node(
 
 ---
 
-### 3. JOB-BASED STRESS — Sustained Workload
+### 3. JOB-BASED STRESS - Sustained Workload
 
 | Scenario | krkn-lib function | Payload | Expected BSOD | Implementation |
 |----------|-------------------|---------|---|---|
@@ -113,7 +113,7 @@ job = client.create_job(memory_hog_job, ns)
 
 ---
 
-### 4. NETWORK FAULTS — Edge Cases
+### 4. NETWORK FAULTS - Edge Cases
 
 | Scenario | krkn-lib function | Method | Expected impact | Implementation |
 |----------|-------------------|--------|---|---|
@@ -124,7 +124,7 @@ job = client.create_job(memory_hog_job, ns)
 
 ---
 
-### 5. MONITORING & ASSERTIONS — Verify VM State
+### 5. MONITORING & ASSERTIONS - Verify VM State
 
 | Function | Purpose | BSOD testing use | Implementation |
 |----------|---------|---|---|
@@ -219,8 +219,8 @@ def test_vmBugchecksUnderVcpuStall(krknChaos):
 ```
 
 **krkn-lib functions used:**
-- `exec_command_on_node(node, cmd, pod, ns)` — inject SIGSTOP/SIGCONT
-- `list_pods(ns, label_selector)` — find virt-launcher (implicitly via oc)
+- `exec_command_on_node(node, cmd, pod, ns)` - inject SIGSTOP/SIGCONT
+- `list_pods(ns, label_selector)` - find virt-launcher (implicitly via oc)
 
 ---
 
@@ -248,7 +248,7 @@ def test_vmBugchecksUnderTimeSkew(krknChaos):
 ```
 
 **krkn-lib functions used:**
-- `exec_command_on_node(node, cmd, pod, ns)` — inject date command
+- `exec_command_on_node(node, cmd, pod, ns)` - inject date command
 
 ---
 
@@ -334,10 +334,10 @@ def test_vmUnderMemoryPressure(krknChaos):
 ```
 
 **krkn-lib functions used:**
-- `get_nodes_infos()` — get memory capacity
-- `create_job(body, ns)` — launch stress job
-- `delete_job(name, ns)` — cleanup
-- `list_ready_nodes()` — verify node health
+- `get_nodes_infos()` - get memory capacity
+- `create_job(body, ns)` - launch stress job
+- `delete_job(name, ns)` - cleanup
+- `list_ready_nodes()` - verify node health
 
 ---
 
@@ -361,9 +361,9 @@ def test_vmUnderCpuBurn(krknChaos):
 ```
 
 **krkn-lib functions used:**
-- `get_node_cpu_count(node)` — size the CPU burn
-- `create_job(body, ns)` — launch CPU hog
-- `delete_job(name, ns)` — cleanup
+- `get_node_cpu_count(node)` - size the CPU burn
+- `create_job(body, ns)` - launch CPU hog
+- `delete_job(name, ns)` - cleanup
 
 ---
 
@@ -417,13 +417,13 @@ def test_vmRecoveryWasNotLiveMigration(krknChaos):
 ```
 
 **krkn-lib functions used:**
-- `custom_object_client` — structured VM/VMI read (read-only)
+- `custom_object_client` - structured VM/VMI read (read-only)
 
 **Benefit over `oc get vmi`:**  
 You get the full object tree as JSON, not string parsing. Can assert on specific fields:
-- `status.migrationState` — proved it was a restart
-- `status.conditions[]` — detailed state machine
-- `metadata.uid` — proved it's a NEW VMI (if uid changed)
+- `status.migrationState` - proved it was a restart
+- `status.conditions[]` - detailed state machine
+- `metadata.uid` - proved it's a NEW VMI (if uid changed)
 
 ---
 
