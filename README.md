@@ -1,93 +1,91 @@
-# pytest
+# bsodpoc
 
-Pytest suite for chaos / BSOD resiliency testing of Windows VMs on OpenShift
-Virtualization (KubeVirt). It provisions VMs three ways — templated YAML via
-`oc apply`, or the [benchmark-runner](https://github.com/redhat-performance/benchmark-runner)
-library (single VM or scaled across nodes) — reaches into guests over
-`virtctl ssh`, and injects failures using
-[krkn-lib](https://github.com/krkn-chaos/krkn-lib).
+`bsodpoc` is a PyTest framework for exercising Windows virtual-machine
+resiliency on OpenShift Virtualization. It brings VM provisioning, guest access,
+cluster operations, and chaos orchestration into one test lifecycle so a
+scenario can prepare its resources, run an assertion, and clean up what it
+created.
 
-## Layout
+The repository is a proof of concept, not a complete BSOD validation system.
+Its current examples cover VM creation and guest reachability, VM provisioning
+through benchmark-runner, recovery after disruption of a VM launcher pod, and
+read-only access to the VM's worker node. They do not yet inject a Windows
+bugcheck, detect a crash, or collect and analyze crash evidence.
 
-- `libs/` — helper modules:
-  - `command_runner.py` — `CommandRunner`, a retry-wrapped `subprocess` runner
-    returning a structured `CommandResult`.
-  - `vm.py` — `VirtctlSSH`, runs commands inside a guest via `virtctl ssh`.
-  - `yaml_parser.py` — `ConfigLoader.loadAndSave`, renders a YAML template's
-    `${VAR}` placeholders and writes the result.
-- `config/` — source VM YAML templates (e.g. `vm-config-tlbflush-on.yaml`).
-- `conftest.py` — just a `pytest_plugins` list registering the fixture modules
-  under `fixtures/`; defines no fixtures itself.
-- `fixtures/` — shared fixtures, one module per concern:
-  - `vm_fixtures.py` — `vmCreate`: renders a VM config with a generated name,
-    applies it via `oc`, yields the created VM names, and deletes them on
-    teardown.
-  - `krknlib_fixtures.py` — `krknChaos`: builds a krkn-lib `KrknKubernetes`
-    client and exposes it (with the test's `@pytest.mark.krkn(...)` params) as
-    a `KrknContext`.
-  - `tunnel_fixtures.py` — `sshTunnelConnection`/`vmWithTunnel`: persistent
-    `virtctl ssh` tunnels into a guest.
-  - `benchmark_runner_fixtures.py` — `oc`/`windowsVM`/`windowsVMScale`:
-    provisions Windows VMs (single or scaled across nodes) via
-    benchmark-runner. See [`docs/benchmark-runner-guide.md`](docs/benchmark-runner-guide.md).
-  - `common.py` — shared constants (`DEFAULT_NAMESPACE`).
-- `tests/` — test cases:
-  - `test_sample1.py` — VM creation + guest `sshd` reachability check, plus
-    `test_benchmark_runner` (the benchmark-runner scale scenario).
-  - `test_chaos.py` — krkn-lib chaos scenarios (virt-launcher pod-kill recovery,
-    host-side node exec / kernel scan). See [`docs/krknlib-guide.md`](docs/krknlib-guide.md).
 
-## Requirements
+## Framework Capabilities
 
-- Python 3.11 (krkn-lib 5.0.0 does not support newer interpreters; use the
-  provided `.venv`).
-- `oc` and `virtctl` CLIs configured and logged in to the target cluster.
-- A valid `KUBECONFIG` (or `~/.kube/config`) — used by both `oc` and krkn-lib.
-- Python dependencies pinned in `requirements.txt` (installed in `.venv`).
-- For `benchmark`-marked tests: `benchmark-runner` installed (**not currently
-  pinned in `requirements.txt`**) plus `KUBEADMIN_PASSWORD`, `WINDOWS_URL`,
-  and (for the scale fixture) `NAMESPACE`, `WORKER_NODE_0`, `WORKER_NODE_1`,
-  `SCALE` env vars — see [`docs/benchmark-runner-guide.md`](docs/benchmark-runner-guide.md).
+| Integration                   | Role                                                              |
+|-------------------------------|-------------------------------------------------------------------|
+| PyTest                        | Organizes selection, setup, teardown, assertions, and reporting.  |
+| OpenShift Virtualization      | Supplies the Windows VMs, VM lifecycle, and guest connectivity.   |
+| benchmark-runner              | Provides an alternative path for provisioning one or more VMs.    |
+| krkn-lib                      | Provides Pod and Node operations for resiliency scenarios.        |
 
-## Setup
+The framework can provision VMs from a repository template or delegate
+provisioning to benchmark-runner. Tests interact with OpenShift through `oc`,
+with virtual machines through `virtctl`, and with Windows guests over SSH.
+krkn-lib adds cluster-level disruption and observation capabilities while `oc`
+continues to provide the OpenShift Virtualization state used in assertions.
 
+
+## Test Lifecycle
+
+At a conceptual level, each test follows the same flow:
+
+ 1. PyTest selects a scenario and supplies its configuration.
+ 2. The framework prepares cluster clients and, when requested, creates VMs.
+ 3. The scenario checks its starting conditions, performs its action, and
+    evaluates the resulting VM, Pod, Node, or guest state.
+ 4. Teardown closes guest connections and removes resources owned by the test.
+
+Some chaos examples intentionally operate on an existing VM instead of one
+created during the same test. Cluster selection and scenario configuration must
+therefore be reviewed before running anything beyond collection.
+
+
+## Current Limitations
+
+- The example suite is environment-specific and should not be treated as a
+  portable acceptance suite.
+- benchmark-runner is used by the framework but is not pinned in
+  `requirements.txt`.
+- The template-based provisioning example expects a template name that is not
+  present under `conf/` at this ref; the included VM template must be selected
+  explicitly before that path can run.
+- The implemented krkn-lib scenarios cover launcher-pod recovery and a
+  non-destructive host inspection. Fault injection that targets BSOD behavior
+  remains future work.
+
+
+## Getting Started
+
+The repository targets Python 3.11:
 ```bash
 python3.11 -m venv .venv
 .venv/bin/pip install -r requirements.txt
+.venv/bin/pytest --collect-only
 ```
 
-## Running tests
+Collection is the safe first check. Executing the examples requires authorized
+access to a disposable OpenShift Virtualization environment plus the CLIs,
+credentials, images, and guest access needed by the selected scenario. The
+tests can create or delete cluster resources.
 
-Use the `.venv` interpreter so `krkn_lib` resolves:
 
+### Unit Tests
+
+The isolated unit suite mocks process, SSH, and cluster boundaries and does not
+collect the environment-specific scenarios under `test-suites/`:
 ```bash
-.venv/bin/pytest
-# or: source .venv/bin/activate && pytest
+.venv/bin/pip install -r requirements--unit.txt
+.venv/bin/python -m pytest -c pytest--unit.ini test--unit/
 ```
 
-Run only BSOD-marked tests:
 
-```bash
-.venv/bin/pytest -m bsod
-```
+## Documentations
 
-Run only krkn-lib chaos scenarios:
-
-```bash
-.venv/bin/pytest -m krkn
-```
-
-Skip the disruptive virt-launcher pod-kill scenario:
-
-```bash
-.venv/bin/pytest --deselect tests/test_chaos.py::TestChaos::test_vmSurvivesVirtLauncherKill
-```
-
-Run only benchmark-runner scenarios (requires the env vars listed under
-Requirements):
-
-```bash
-.venv/bin/pytest -m benchmark
-```
-
-Configuration (log format, test discovery, markers) lives in `pytest.ini`.
+- [PyTest lifecycle](docs/walkthrough--pytest.md)
+- [benchmark-runner integration](docs/guide--benchmark-runner.md)
+- [krkn-lib integration](docs/guide--krkn-lib.md)
+- [BSOD scenario roadmap](docs/roadmap--krkn-lib-bsod.md)
